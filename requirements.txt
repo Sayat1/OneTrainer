@@ -9,8 +9,8 @@ scipy==1.11.4; sys_platform != 'win32'
 
 # pytorch
 --extra-index-url https://download.pytorch.org/whl/cu118
-torch==2.1.2+cu118
-torchvision==0.16.2+cu118
+#torch==2.1.2+cu118
+#torchvision==0.16.2+cu118
 accelerate==0.25.0
 safetensors==0.4.1
 tensorboard==2.15.1
@@ -31,14 +31,14 @@ open-clip-torch==2.23.0
 -e git+https://github.com/Nerogar/mgds.git@4a2433c#egg=mgds
 
 # xformers
-xformers==0.0.23.post1+cu118
+#xformers==0.0.23.post1+cu118
 
 # optimizers
 --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui --prefer-binary
-bitsandbytes==0.41.1 # bitsandbytes for 8-bit optimizers
-dadaptation==3.2 # dadaptation optimizers
-lion-pytorch==0.1.2 # lion optimizer
-prodigyopt==1.0 # prodigy optimizer
+#bitsandbytes==0.41.1 # bitsandbytes for 8-bit optimizers
+dadaptation # dadaptation optimizers
+lion-pytorch # lion optimizer
+prodigyopt # prodigy optimizer
 
 # ui
-customtkinter==5.2.1
+#customtkinter==5.2.1
