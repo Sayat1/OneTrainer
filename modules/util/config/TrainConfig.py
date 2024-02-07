@@ -275,6 +275,7 @@ class TrainConfig(BaseConfig):
     backup_before_save: bool
     save_after: float
     save_after_unit: TimeUnit
+    rolling_save_count: int
 
     def __init__(self, data: list[(str, Any, type, bool)]):
         super(TrainConfig, self).__init__(
@@ -505,5 +506,6 @@ class TrainConfig(BaseConfig):
         data.append(("backup_before_save", True, bool, False))
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
+        data.append(("rolling_save_count", 1, int, False))
 
         return TrainConfig(data)
