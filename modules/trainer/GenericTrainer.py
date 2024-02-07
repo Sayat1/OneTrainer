@@ -351,8 +351,8 @@ class GenericTrainer(BaseTrainer):
         backup_path = os.path.join(self.config.workspace_dir, "backup", backup_name)
 
         try:
-            if self.args.rolling_backup:
-                self.__prune_backups(self.args.rolling_backup_count-1)
+            if self.config.rolling_backup:
+                self.__prune_backups(self.config.rolling_backup_count-1)
             print("Creating Backup " + backup_path)
 
             self.model_saver.save(
@@ -386,7 +386,7 @@ class GenericTrainer(BaseTrainer):
 
         self.callbacks.on_update_status("saving")
         output_model_destination_path = Path(self.config.output_model_destination )
-        save_path = str(output_model_destination_path.parent / f"{output_model_destination_path.stem}-{train_progress.filename_string()}{self.args.output_model_format.file_extension()}")
+        save_path = str(output_model_destination_path.parent / f"{output_model_destination_path.stem}-{train_progress.filename_string()}{self.config.output_model_format.file_extension()}")
         # save_path = os.path.join(
         #     self.args.workspace_dir,
         #     "save",
@@ -418,8 +418,8 @@ class GenericTrainer(BaseTrainer):
         finally:
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)
-            if self.args.rolling_save_count > 0:
-                self.__prune_saves(self.args.rolling_save_count,save_path,output_model_destination_path.stem,self.args.output_model_format.file_extension())
+            if self.config.rolling_save_count > 0:
+                self.__prune_saves(self.config.rolling_save_count,save_path,output_model_destination_path.stem,self.config.output_model_format.file_extension())
 
         torch_gc()
 
