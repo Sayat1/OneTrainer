@@ -178,11 +178,35 @@ class GenericTrainer(BaseTrainer):
             for dirpath in backup_directories[backups_to_keep:]:
                 dirpath = os.path.join(backup_dirpath, dirpath)
                 try:
+                    print(f"Deleting old backup {str(dirpath)}")
+                    sub_files = Path(dirpath).rglob("*.*")
+                    for sub_file in sub_files:
+                        with open(sub_file,'w') as f:
+                            pass
+                        os.remove(sub_file)
                     shutil.rmtree(dirpath)
                 except Exception as e:
                     print(f"Could not delete old rolling backup {dirpath}")
 
         return None
+
+    def __prune_saves(self,saves_to_keep: int,save_path: str,save_base_name: str,save_file_ext: str):
+        save_dirpath = Path(save_path).parent
+        if save_dirpath.exists():
+            save_files_path = sorted(save_dirpath.glob(f"{save_base_name}*{save_file_ext}"),key=os.path.getmtime,reverse=True)
+            for save_file_path in save_files_path[saves_to_keep:]:
+                try:
+                    print(f"Deleting old save {str(save_file_path)}")
+                    with open(str(save_file_path),'w') as f:
+                        pass
+                    os.remove(str(save_file_path))
+                    yaml_file = save_dirpath/f"{save_file_path.stem}.yaml"
+                    if yaml_file.exists():
+                        with open(str(yaml_file),'w') as f:
+                            pass
+                        os.remove(str(yaml_file))
+                except Exception as e:
+                    print(f"Could not delete old rolling save {save_file_path}")
 
     def __enqueue_sample_during_training(self, fun: Callable):
         self.sample_queue.append(fun)
@@ -315,17 +339,19 @@ class GenericTrainer(BaseTrainer):
         with open(args_path, "w") as f:
             json.dump(self.args.to_dict(), f, indent=4)
         shutil.copy2(self.args.concept_file_name, concepts_path)
-        shutil.copy2(self.args.sample_definition_file_name, samples_path)
+        #shutil.copy2(self.args.sample_definition_file_name, samples_path)
 
     def backup(self, train_progress: TrainProgress):
         torch_gc()
-
+        
         self.callbacks.on_update_status("creating backup")
 
         backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}"
         backup_path = os.path.join(self.args.workspace_dir, "backup", backup_name)
 
         try:
+            if self.args.rolling_backup:
+                self.__prune_backups(self.args.rolling_backup_count-1)
             print("Creating Backup " + backup_path)
 
             self.model_saver.save(
@@ -348,8 +374,7 @@ class GenericTrainer(BaseTrainer):
                 print("Could not delete partial backup")
                 pass
         finally:
-            if self.args.rolling_backup:
-                self.__prune_backups(self.args.rolling_backup_count)
+            pass
 
         self.model_setup.setup_train_device(self.model, self.args)
 
@@ -359,12 +384,13 @@ class GenericTrainer(BaseTrainer):
         torch_gc()
 
         self.callbacks.on_update_status("saving")
-
-        save_path = os.path.join(
-            self.args.workspace_dir,
-            "save",
-            f"{get_string_timestamp()}-save-{train_progress.filename_string()}{self.args.output_model_format.file_extension()}"
-        )
+        output_model_destination_path = Path(self.args.output_model_destination )
+        save_path = str(output_model_destination_path.parent / f"{output_model_destination_path.stem}-{train_progress.filename_string()}{self.args.output_model_format.file_extension()}")
+        # save_path = os.path.join(
+        #     self.args.workspace_dir,
+        #     "save",
+        #     f"{get_string_timestamp()}-save-{train_progress.filename_string()}{self.args.output_model_format.file_extension()}"
+        # )
         print("Saving " + save_path)
 
         try:
@@ -391,6 +417,8 @@ class GenericTrainer(BaseTrainer):
         finally:
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)
+            if self.args.rolling_save_count > 0:
+                self.__prune_saves(self.args.rolling_save_count,save_path,output_model_destination_path.stem,self.args.output_model_format.file_extension())
 
         torch_gc()
 
@@ -482,10 +510,10 @@ class GenericTrainer(BaseTrainer):
                 if not has_gradient:
                     self.__execute_sample_during_training()
 
-                if self.__needs_backup(train_progress) or self.commands.get_and_reset_backup_command():
-                    self.backup(train_progress)
+                if (self.__needs_backup(self.model.train_progress) and self.one_step_trained) or self.commands.get_and_reset_backup_command():
+                    self.backup(self.model.train_progress)
 
-                if self.__needs_save(train_progress):
+                if self.__needs_save(train_progress) and self.one_step_trained:
                     self.save(train_progress)
 
                 self.callbacks.on_update_status("training")

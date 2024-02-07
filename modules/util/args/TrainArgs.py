@@ -210,6 +210,7 @@ class TrainArgs(BaseArgs):
     backup_before_save: bool
     save_after: float
     save_after_unit: TimeUnit
+    rolling_save_count: int
 
     def __init__(self, data: list[(str, Any, type, bool)]):
         super(TrainArgs, self).__init__(data)
@@ -450,6 +451,7 @@ class TrainArgs(BaseArgs):
         parser.add_argument("--backup-before-save", required=False, action='store_true', dest="backup_before_save", help="Create a backup before saving the final model")
         parser.add_argument("--save-after", type=float, required=False, default=0, dest="save_after", help="The interval for backups")
         parser.add_argument("--save-after-unit", type=TimeUnit, required=False, default=TimeUnit.NEVER, dest="save_after_unit", help="The unit applied to the backup-after option")
+        parser.add_argument("--rolling-save-count", type=int, required=False, default=0, dest="rolling_save_count", help="The number of saves")
 
         # @formatter:on
 
@@ -653,5 +655,6 @@ class TrainArgs(BaseArgs):
         data.append(("backup_before_save", True, bool, False))
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
+        data.append(("rolling_save_count", 0, int, False))
 
         return TrainArgs(data)

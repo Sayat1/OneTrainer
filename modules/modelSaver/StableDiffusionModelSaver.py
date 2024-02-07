@@ -13,7 +13,7 @@ from modules.modelSaver.BaseModelSaver import BaseModelSaver
 from modules.util.convert.convert_sd_diffusers_to_ckpt import convert_sd_diffusers_to_ckpt
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.ModelType import ModelType
-
+from modules.util.torch_util import torch_gc
 
 class StableDiffusionModelSaver(BaseModelSaver):
 
@@ -23,19 +23,33 @@ class StableDiffusionModelSaver(BaseModelSaver):
             destination: str,
             dtype: torch.dtype,
     ):
+        torch_gc()
         # Copy the model to cpu by first moving the original model to cpu. This preserves some VRAM.
+        # pipeline = model.create_pipeline()
+        # original_device = pipeline.device
+        # pipeline.to("cpu")
+        # print("save1")
+        # pipeline_copy = copy.deepcopy(pipeline)
+        # pipeline.to(original_device)
+        # print("save2")
+        # pipeline_copy.to("cpu", dtype, silence_dtype_warnings=True)
+        # print("save3")
+        # os.makedirs(Path(destination).absolute(), exist_ok=True)
+        # pipeline_copy.save_pretrained(destination)
+        # print("save4")
+        # del pipeline_copy
         pipeline = model.create_pipeline()
         original_device = pipeline.device
         pipeline.to("cpu")
-        pipeline_copy = copy.deepcopy(pipeline)
-        pipeline.to(original_device)
-
-        pipeline_copy.to("cpu", dtype, silence_dtype_warnings=True)
-
+        print("save1")
         os.makedirs(Path(destination).absolute(), exist_ok=True)
-        pipeline_copy.save_pretrained(destination)
+        pipeline.save_pretrained(destination)
+        pipeline.to(original_device)
+        print("save2")
+        del pipeline
 
-        del pipeline_copy
+
+
 
     def __save_ckpt(
             self,
@@ -103,8 +117,12 @@ class StableDiffusionModelSaver(BaseModelSaver):
 
         # ema
         if model.ema:
+            torch_gc()
             os.makedirs(os.path.join(destination, "ema"), exist_ok=True)
+            original_device = model.ema.device
+            model.ema.to("cpu")
             torch.save(model.ema.state_dict(), os.path.join(destination, "ema", "ema.pt"))
+            model.ema.to(original_device)
 
         # meta
         with open(os.path.join(destination, "meta.json"), "w") as meta_file:
