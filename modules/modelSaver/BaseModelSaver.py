@@ -78,6 +78,8 @@ class BaseModelSaver(metaclass=ABCMeta):
             "ot_branch": git_util.get_git_branch(),
             "ot_revision": git_util.get_git_revision(),
         }
+        if model.train_config:
+            one_trainer_header.update({"ot_train_config":model.train_config})
         kohya_header = {} # needed for the Automatic1111 webui to pick up model versions
         if model.model_type.is_stable_diffusion_xl():
             kohya_header["ss_base_model_version"] = "sdxl_"

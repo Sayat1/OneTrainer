@@ -147,18 +147,17 @@ class OptimizerParamsWindow(ctk.CTkToplevel):
             components.label(master, row, col, title, tooltip=tooltip)
 
             if type != 'bool':
-                entry_widget = components.entry(master, row, col + 1, self.optimizer_ui_state, key)
-                entry_widget.bind("<FocusOut>", self.update_user_pref)
+                components.entry(master, row, col + 1, self.optimizer_ui_state, key,
+                                 command=self.update_user_pref)
             else:
-                switch_widget = components.switch(master, row, col + 1, self.optimizer_ui_state, key)
-                switch_widget.configure(command=self.update_user_pref)
+                components.switch(master, row, col + 1, self.optimizer_ui_state, key,
+                                  command=self.update_user_pref)
 
     def update_user_pref(self, *args):
         update_optimizer_config(self.train_config)
 
-    def on_optimizer_change(self, optimizer: str):
-        optimizer = Optimizer[optimizer]
-        optimizer_config = change_optimizer(self.train_config, optimizer)
+    def on_optimizer_change(self, *args):
+        optimizer_config = change_optimizer(self.train_config)
         self.ui_state.get_var("optimizer").update(optimizer_config)
 
         self.clear_dynamic_ui(self.frame)

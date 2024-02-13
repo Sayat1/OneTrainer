@@ -1,0 +1,39 @@
+OUTNAME = "Chaewon-ADAM8-OT-3-FINETUNE-CAP-EMA999-lr2e6-10TE-COS-T3-GSFC-350E"
+OUTPUTPATH = "/content/drive/MyDrive/Training/model/"+OUTNAME+".safetensors"
+
+#NAI=nai
+#NAI="runwayml/stable-diffusion-v1-5"
+NAI="/content/drive/MyDrive/Training/exists/t3_Ver111_prune.safetensors"
+
+CONCEPT="/content/drive/MyDrive/Training/ot_concept/concepts_colab_mix.json"
+#CONCEPT="/content/my_concept.json"
+
+EMA="GPU"
+EMA_DECAY="0.999"
+
+UNET_LR="2e-06"
+TE_LR="2e-06"
+TRAIN_TE = '--train-text-encoder --train-text-encoder-2' 
+#TRAIN_TE = ''
+
+WEIGHT_DTYPE="FLOAT_32"
+TRAIN_DTYPE="FLOAT_16"
+OUT_DTYPE="FLOAT_16"
+
+CLEAN_CACHE = "--clear-cache-before-training"
+#CLEAN_CACHE = ""
+
+RESOLUTION="624"
+EPOCH="350"
+SCHEDULER = "COSINE"
+LR_WARMUP="640"
+LR_CYCLES="1"
+MAX_NOISE="1"
+GRADIENT_ACCUMULATION="1"
+
+#OPTIMIZER_SETTINGS='--optimizer="ADAFACTOR" --optimizer-clip-threshold="1.0" --optimizer-decay-rate="-0.8"  --optimizer-eps="1e-30" --optimizer-eps2="0.001" --optimizer-relative-step="False" --optimizer-scale-parameter="False" --optimizer-warmup-init="False" --optimizer-weight-decay="0.0"'
+#OPTIMIZER_SETTINGS='--optimizer="PRODIGY" --optimizer-beta1="0.9" --optimizer-beta2="0.99" --optimizer-eps="1e-08" --optimizer-weight-decay="0.1" --optimizer-decouple="True" --optimizer-bias-correction="False" --optimizer-safeguard-warmup="False" --optimizer-d0="1e-08" --optimizer-d-coef="1.0" --optimizer-growth-rate="inf" --optimizer-fsdp-in-use="False"'
+#OPTIMIZER_SETTINGS='--optimizer="DADAPT_ADAM" --optimizer-beta1="0.9" --optimizer-beta2="0.99" --optimizer-eps="1e-08" --optimizer-weight-decay="0.1" --optimizer-log-every="10" --optimizer-decouple="True" --optimizer-use-bias-correction="False" --optimizer-d0="1e-08" --optimizer-growth-rate="inf" --optimizer-fsdp-in-use="False"'
+OPTIMIZER_SETTINGS='--optimizer="ADAMW_8BIT" --optimizer-beta1="0.9" --optimizer-beta2="0.99" --optimizer-weight-decay="0.1"'
+
+!python scripts/train.py --training-method="FINE_TUNE" --model-type="STABLE_DIFFUSION_15" --debug-dir="/content/debug" --workspace-dir="/content/drive/MyDrive/Training/model/{OUTNAME}/" --continue-last-backup --cache-dir="/content/workspace-cache/run" --base-model-name={NAI} --weight-dtype={WEIGHT_DTYPE} --output-dtype={OUT_DTYPE} --output-model-format="SAFETENSORS" --output-model-destination={OUTPUTPATH} --gradient-checkpointing --concept-file-name={CONCEPT} --aspect-ratio-bucketing --latent-caching {CLEAN_CACHE} --learning-rate-scheduler={SCHEDULER} --learning-rate="1.0" --learning-rate-warmup-steps={LR_WARMUP} --learning-rate-cycles={LR_CYCLES} --text-encoder-learning-rate={TE_LR} --unet-learning-rate={UNET_LR} --epochs={EPOCH} --batch-size="1" --gradient-accumulation-steps={GRADIENT_ACCUMULATION} --ema={EMA} --ema-decay={EMA_DECAY} --ema-update-step-interval="5" --train-device="cuda" --temp-device="cpu" --train-dtype={TRAIN_DTYPE} --fallback-train-dtype="FLOAT_32" --resolution={RESOLUTION} --attention-mechanism="XFORMERS" --align-prop-probability="0.1" --align-prop-loss="AESTHETIC" --align-prop-weight="0.01" --align-prop-steps="20" --align-prop-truncate-steps="0.5" --align-prop-cfg-scale="7.0" --mse-strength="1.0" --mae-strength="0.0" --vb-loss-strength="1.0" --loss-scaler="NONE" --learning-rate-scaler="NONE" --train-unet --train-unet-epochs="10000" --offset-noise-weight="0.0" --perturbation-noise-weight="0.0" --min-noising-strength="0.0" --max-noising-strength={MAX_NOISE} --noising-weight="0.0" --noising-bias="0.5" --unet-weight-dtype="NONE" --train-prior --train-prior-epochs="10000" --prior-weight-dtype="NONE" {TRAIN_TE} --train-text-encoder-epochs="10000" --text-encoder-layer-skip="0" --text-encoder-weight-dtype="NONE" --train-text-encoder-2-epochs="30" --text-encoder-2-layer-skip="0" --text-encoder-2-weight-dtype="NONE" --vae-model-name="" --vae-weight-dtype="FLOAT_32" --decoder-model-name="" --decoder-weight-dtype="NONE" --decoder-text-encoder-weight-dtype="NONE" --decoder-vqgan-weight-dtype="NONE" --masked-training --unmasked-probability="0.1" --unmasked-weight="0.1" --normalize-masked-area-loss --token-count="1" --initial-embedding-text="*" --embedding-weight-dtype="FLOAT_32" --lora-model-name="" --lora-rank="128" --lora-alpha="64" --lora-weight-dtype="FLOAT_32" {OPTIMIZER_SETTINGS} --sample-definition-file-name="/content/training_samples/samples.json" --sample-after="10" --sample-after-unit="NEVER" --sample-image-format="JPG" --samples-to-tensorboard --non-ema-sampling --backup-after="50" --backup-after-unit="EPOCH" --rolling-backup --rolling-backup-count="1" --save-after="20" --save-after-unit="EPOCH" --rolling-save-count="1"

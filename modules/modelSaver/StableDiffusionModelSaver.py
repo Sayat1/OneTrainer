@@ -85,6 +85,7 @@ class StableDiffusionModelSaver(BaseModelSaver):
             destination: str,
             dtype: torch.dtype,
     ):
+        torch_gc()
         state_dict = convert_sd_diffusers_to_ckpt(
             model_type,
             model.vae.state_dict(),

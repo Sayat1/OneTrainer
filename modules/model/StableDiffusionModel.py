@@ -54,6 +54,7 @@ class StableDiffusionModel(BaseModel):
     unet_lora: LoRAModuleWrapper | None
 
     sd_config: dict | None
+    train_config:dict | None
 
     def __init__(
             self,
@@ -73,6 +74,7 @@ class StableDiffusionModel(BaseModel):
             unet_lora: LoRAModuleWrapper | None = None,
             sd_config: dict | None = None,
             model_spec: ModelSpec | None = None,
+            train_config: str | None = None ,
     ):
         super(StableDiffusionModel, self).__init__(
             model_type=model_type,
@@ -80,6 +82,7 @@ class StableDiffusionModel(BaseModel):
             ema_state_dict=ema_state_dict,
             train_progress=train_progress,
             model_spec=model_spec,
+            train_config=train_config
         )
 
         self.tokenizer = tokenizer

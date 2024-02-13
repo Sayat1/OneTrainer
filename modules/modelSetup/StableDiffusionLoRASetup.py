@@ -70,7 +70,7 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
 
         if model.unet_lora is None:
             model.unet_lora = LoRAModuleWrapper(
-                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, ["attentions"]
+                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio
             )
 
         model.text_encoder.requires_grad_(False)

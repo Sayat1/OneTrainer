@@ -81,27 +81,41 @@ class LoRAModule(metaclass=ABCMeta):
 
 
 class LinearLoRAModule(LoRAModule):
-    def __init__(self, prefix: str, orig_module: Linear, rank: int, alpha: float):
-        super(LinearLoRAModule, self).__init__(prefix, orig_module, rank, alpha)
-
+    def __init__(self, prefix: str, orig_module: Linear, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float):
         in_features = orig_module.in_features
         out_features = orig_module.out_features
+        my_rank = rank
+        my_alpha = alpha
+        if rank_ratio > 0.0:
+            my_rank = int(min(in_features,out_features) * rank_ratio)
+            my_alpha = my_rank * alpha_ratio
+        super(LinearLoRAModule, self).__init__(prefix, orig_module, my_rank, my_alpha)
 
-        self.lora_down = Linear(in_features, rank, bias=False, device=orig_module.weight.device)
-        self.lora_up = Linear(rank, out_features, bias=False, device=orig_module.weight.device)
+
+        self.lora_down = Linear(in_features, my_rank, bias=False, device=orig_module.weight.device)
+        self.lora_up = Linear(my_rank, out_features, bias=False, device=orig_module.weight.device)
 
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
 
 
 class Conv2dLoRAModule(LoRAModule):
-    def __init__(self, prefix: str, orig_module: Conv2d, rank: int, alpha: float):
-        super(Conv2dLoRAModule, self).__init__(prefix, orig_module, rank, alpha)
+    def __init__(self, prefix: str, orig_module: Conv2d, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float):
         in_channels = orig_module.in_channels
         out_channels = orig_module.out_channels
+        my_rank = rank
+        my_alpha = alpha
+        if rank_ratio > 0.0:
+            my_rank = int(min(in_channels,out_channels) * rank_ratio)
+            my_alpha = my_rank * alpha_ratio
+        super(Conv2dLoRAModule, self).__init__(prefix, orig_module, my_rank, my_alpha)
+        
+        kernel_size = orig_module.kernel_size
+        stride = orig_module.stride
+        padding = orig_module.padding
 
-        self.lora_down = Conv2d(in_channels, rank, (1, 1), bias=False, device=orig_module.weight.device)
-        self.lora_up = Conv2d(rank, out_channels, (1, 1), bias=False, device=orig_module.weight.device)
+        self.lora_down = Conv2d(in_channels, my_rank, kernel_size,stride,padding, bias=False, device=orig_module.weight.device)
+        self.lora_up = Conv2d(my_rank, out_channels, (1, 1), (1, 1), bias=False, device=orig_module.weight.device)
 
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
@@ -160,25 +174,35 @@ class LoRAModuleWrapper:
             prefix: str,
             alpha: float = 1.0,
             module_filter: list[str] = None,
+            conv_rank:int = 0,
+            conv_alpha:float  = 0.0,
+            rank_ratio:float = 0.0,
+            alpha_ratio:float = 0.0
     ):
         super(LoRAModuleWrapper, self).__init__()
         self.orig_module = orig_module
-        self.rank = rank
         self.prefix = prefix
         self.module_filter = module_filter if module_filter is not None else []
+        if conv_rank>0 and conv_alpha<=0:
+            conv_alpha = conv_rank
+        if rank_ratio>0.0 and alpha_ratio<=0.0:
+            alpha_ratio = 1.0
 
-        self.modules = self.__create_modules(orig_module, alpha)
+        self.modules = self.__create_modules(orig_module, rank,alpha, conv_rank, conv_alpha, rank_ratio, alpha_ratio)
 
-    def __create_modules(self, orig_module: nn.Module | None, alpha: float) -> dict[str, LoRAModule]:
+    def __create_modules(self, orig_module: nn.Module | None,rank:int, alpha: float, conv_rank:int, conv_alpha:float, rank_ratio:float, alpha_ratio:float) -> dict[str, LoRAModule]:
         lora_modules = {}
 
         if orig_module is not None:
             for name, child_module in orig_module.named_modules():
                 if len(self.module_filter) == 0 or any([x in name for x in self.module_filter]):
                     if isinstance(child_module, Linear):
-                        lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)
+                        lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, child_module, rank, alpha, rank_ratio, alpha_ratio)
                     elif isinstance(child_module, Conv2d):
-                        lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)
+                        if child_module.kernel_size == (1,1):
+                            lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, child_module, rank, alpha, rank_ratio, alpha_ratio)
+                        elif conv_rank > 0:
+                            lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, child_module, conv_rank, conv_alpha, rank_ratio, alpha_ratio)
 
         return lora_modules
 

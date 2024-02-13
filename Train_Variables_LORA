@@ -1,0 +1,67 @@
+OUTNAME = "Chaewon-SPEEPD-OT-20-LORA-CAP-EMA999-B4-COS-CHL-CFCF768-FIXED768-100E-128A64-R02505"
+OUTPUTPATH = "/content/drive/MyDrive/Training/model/"+OUTNAME+".safetensors"
+
+NAI=nai
+#NAI="runwayml/stable-diffusion-v1-5"
+#NAI="hassanblend/hassanblend1.4"
+#NAI="/content/drive/MyDrive/Training/exists/t3_Ver111_prune.safetensors"
+
+#CONCEPT="/content/drive/MyDrive/Training/ot_concept/concepts_colab_mix.json"
+CONCEPT="/content/my_concept.json"
+
+TRAIN_METHOD="LORA"
+
+EMA="GPU"
+#EMA="OFF"
+EMA_DECAY="0.999"
+
+UNET_LR=1
+TE_LR=1
+TRAIN_TE = True
+TE_LAYER_SKIP=2
+
+WEIGHT_DTYPE="FLOAT_32"
+TRAIN_DTYPE="FLOAT_16"
+OUT_DTYPE="FLOAT_16"
+
+CLEAN_CACHE = True
+BUCKET = False
+
+RESOLUTION=768
+EPOCH=100
+SCHEDULER = "COSINE"
+LR_WARMUP=0
+LR_CYCLES=1
+MAX_NOISE=1.0
+GRADIENT_ACCUMULATION=1
+BATCH_SIZE=4
+
+LOSS_SCALER="NONE" #GRADIENT_ACCUMULATION #BATCH #BOTH #NONE
+LR_SCALER="NONE" #GRADIENT_ACCUMULATION #BATCH #BOTH #NONE
+
+OPTIMIZER_SETTINGS={"optimizer":"PRODIGY" ,"beta1":0.9, "beta2":0.99, "weight_decay":0.0, "decouple":True, "use_bias_correction":False, "safeguard_warmup":False, "d0":1e-06, "d_coef":1.0, "growth_rate":"inf"}
+#OPTIMIZER_SETTINGS={"optimizer":"DADAPT_ADAM", "beta1":0.9, "beta2":0.99, "weight_decay":0.1, "log_every":10, "decouple":True, "use_bias_correction":False, "d0":1e-08, "growth_rate":inf}
+#OPTIMIZER_SETTINGS={"optimizer":"ADAMW_8BIT", "beta1":0.9 ,"beta2":0.99 ,"weight_decay":0.1}
+#OPTIMIZER_SETTINGS={"optimizer":"ADAMW", "beta1":0.9 ,"beta2":0.99 ,"weight_decay":0.1}
+
+LORA_CONTINUE=""
+LORA_RANK=128
+LORA_ALPHA=64
+LORA_CONV_RANK=0
+LORA_CONV_ALPHA=0
+LORA_MODULES=["attentions"]
+#LORA_MODULES=["attentions","resnets","upsamplers","downsamplers"]
+IN_DEV_SETTINGS={"lora_rank_ratio":0.25,"lora_alpha_ratio":0.5}
+
+
+BACKUP_AFTER = "100"
+BACKUP_AFTER_UNIT = "NEVER"
+#BACKUP_AFTER_UNIT = "NEVER"
+ROLLING_BACKUP = True
+ROLLING_BACKUP_COUNT = 1
+BACKUP_BEFORE_SAVE = False
+
+SAVE_AFTER = "20"
+#SAVE_AFTER_UNIT = "EPOCH"
+SAVE_AFTER_UNIT = "EPOCH"
+ROLLING_SAVE_COUNT = 1

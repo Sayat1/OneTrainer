@@ -17,6 +17,7 @@ class BaseModel(metaclass=ABCMeta):
     ema_state_dict: dict | None
     train_progress: TrainProgress
     model_spec: ModelSpec | None
+    train_config: str | None
 
     def __init__(
             self,
@@ -25,6 +26,7 @@ class BaseModel(metaclass=ABCMeta):
             ema_state_dict: dict | None,
             train_progress: TrainProgress,
             model_spec: ModelSpec | None,
+            train_config: str | None,
     ):
         self.model_type = model_type
         self.optimizer = None
@@ -32,6 +34,7 @@ class BaseModel(metaclass=ABCMeta):
         self.ema_state_dict = ema_state_dict
         self.train_progress = train_progress if train_progress is not None else TrainProgress()
         self.model_spec = model_spec
+        self.train_config = train_config
 
     @abstractmethod
     def to(self, device: torch.device):

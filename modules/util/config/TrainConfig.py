@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from typing import Any
 
 from modules.util.ModelNames import ModelNames
@@ -252,7 +253,12 @@ class TrainConfig(BaseConfig):
     lora_model_name: str
     lora_rank: int
     lora_alpha: float
+    lora_conv_rank: int
+    lora_conv_alpha: float
     lora_weight_dtype: DataType
+    lora_modules: list[str]
+    lora_rank_ratio:float
+    lora_alpha_ratio:float
 
     # optimizer
     optimizer: TrainOptimizerConfig
@@ -287,17 +293,22 @@ class TrainConfig(BaseConfig):
         )
 
     def __migration_0(self, data: dict) -> dict:
-        migrated_data = {
-            'optimizer': {}
-        }
+        optimizer_settings = {}
+        migrated_data = {}
         for key, value in data.items():
             # move optimizer settings to sub object
             if key == 'optimizer':
-                migrated_data['optimizer']['optimizer'] = value
+                optimizer_settings['optimizer'] = value
             elif key.startswith('optimizer'):
-                migrated_data['optimizer'][key.removeprefix('optimizer_')] = value
+                optimizer_settings[key.removeprefix('optimizer_')] = value
             else:
                 migrated_data[key] = value
+
+        if 'optimizer' in optimizer_settings:
+            migrated_data['optimizer'] = optimizer_settings
+            migrated_data['optimizer_defaults'] = {
+                optimizer_settings['optimizer']: deepcopy(optimizer_settings)
+            }
 
         return migrated_data
 
@@ -483,7 +494,12 @@ class TrainConfig(BaseConfig):
         data.append(("lora_model_name", "", str, False))
         data.append(("lora_rank", 16, int, False))
         data.append(("lora_alpha", 1.0, float, False))
+        data.append(("lora_conv_rank", 0, int, False))
+        data.append(("lora_conv_alpha", 0.0, float, False))
         data.append(("lora_weight_dtype", DataType.FLOAT_32, DataType, False))
+        data.append(("lora_modules", ["attentions"], list[str], False))
+        data.append(("lora_rank_ratio", 0.0, float, False))
+        data.append(("lora_alpha_ratio", 0.0, float, False))
 
         # optimizer
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
