@@ -1,11 +1,10 @@
-OUTNAME = "Chaewon-ADAM8-OT-11-FINETUNE-NOCAP-NOREG-EMA999-B5-lr5e6-10TE-MJ7-CFC-150E"
+OUTNAME = "Chaewon-ADAM8-OT-12-FINETUNE-NOCAP-NOREG-EMA999-B5-lr5e6-10TE-MJ7-CFC-150E"
 OUTPUTPATH = "/content/drive/MyDrive/Training/model/"+OUTNAME+".safetensors"
 
 NAI=nai
 #NAI="runwayml/stable-diffusion-v1-5"
 #NAI="/content/drive/MyDrive/Training/exists/t3_Ver111_prune.safetensors"
 
-#CONCEPT="/content/drive/MyDrive/Training/ot_concept/concepts_colab_mix.json"
 CONCEPT="/content/my_concept.json"
 
 TRAIN_METHOD="FINE_TUNE"

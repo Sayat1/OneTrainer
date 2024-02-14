@@ -485,7 +485,8 @@ class GenericTrainer(BaseTrainer):
                     approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
                     batch_size=self.config.batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    global_step=train_progress.global_step
+                    global_step=train_progress.global_step,
+                    eta_min = self.config.learning_rate_eta_min
                 )
 
             current_epoch_length = len(self.data_loader.get_data_loader()) + train_progress.epoch_step
@@ -546,6 +547,18 @@ class GenericTrainer(BaseTrainer):
                     self.model.optimizer.zero_grad(set_to_none=True)
                     has_gradient = False
 
+                    # calculate learning rate for dadpt or prodigy 
+                    if str(self.config.optimizer.optimizer).lower().startswith("prodigy") or str(self.config.optimizer.optimizer).lower().startswith("dadapt"):
+                        for i in range(0, len(self.model.optimizer.param_groups)):
+                            if "dlr" in self.model.optimizer.param_groups[i]:
+                                self.tensorboard.add_scalar(f"learning_rate/dlr/group{i}",
+                                    self.model.optimizer.param_groups[i]["dlr"] * self.model.optimizer.param_groups[i].get("layer_scale",1),
+                                    train_progress.global_step)
+                            else:
+                                self.tensorboard.add_scalar(f"learning_rate/d*lr/group{i}",
+                                    self.model.optimizer.param_groups[i]["d"] * self.model.optimizer.param_groups[i]["lr"] * self.model.optimizer.param_groups[i].get("layer_scale",1),
+                                    train_progress.global_step)
+                                
                     self.tensorboard.add_scalar(
                         "learning_rate", lr_scheduler.get_last_lr()[0], train_progress.global_step
                     )
@@ -606,5 +619,5 @@ class GenericTrainer(BaseTrainer):
 
         self.tensorboard.close()
 
-        if self.config.tensorboard:
-            self.tensorboard_subprocess.kill()
+        # if self.config.tensorboard:
+        #     self.tensorboard_subprocess.kill()

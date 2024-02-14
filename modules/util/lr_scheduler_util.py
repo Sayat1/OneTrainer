@@ -30,11 +30,12 @@ def lr_lambda_linear(
 
 def lr_lambda_cosine(
         scheduler_steps: int,
+        eta_min: float
 ):
     def lr_lambda(current_step: int):
         progress = float(current_step) / float(scheduler_steps)
         schedule = math.cos(progress * math.pi)
-        return max(0.0, 0.5 * (1.0 + schedule))
+        return max(eta_min, eta_min + 0.5 * (1-eta_min) * (1.0 + schedule))
 
     return lr_lambda
 

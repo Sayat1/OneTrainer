@@ -671,12 +671,14 @@ def create_lr_scheduler(
         approximate_epoch_length: int,
         gradient_accumulation_steps: int,
         global_step: int = 0,
+        eta_min: float = 0.0,
 ) -> LRScheduler:
     steps_per_epoch = approximate_epoch_length / batch_size
     total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
     warmup_steps = int(warmup_steps / gradient_accumulation_steps)
     scheduler_steps = total_steps - warmup_steps
 
+    assert eta_min < 1,"eta_min is must smaller than 1.0" 
     match learning_rate_scheduler:
         case LearningRateScheduler.CONSTANT:
             lr_lambda = lr_lambda_constant()
@@ -688,7 +690,8 @@ def create_lr_scheduler(
 
         case LearningRateScheduler.COSINE:
             lr_lambda = lr_lambda_cosine(
-                scheduler_steps
+                scheduler_steps,
+                eta_min
             )
 
         case LearningRateScheduler.COSINE_WITH_RESTARTS:
