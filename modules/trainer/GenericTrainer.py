@@ -562,10 +562,11 @@ class GenericTrainer(BaseTrainer):
                                 self.tensorboard.add_scalar(f"learning_rate/d*lr/group{i}",
                                     self.model.optimizer.param_groups[i]["d"] * self.model.optimizer.param_groups[i]["lr"] * self.model.optimizer.param_groups[i].get("layer_scale",1),
                                     train_progress.global_step)
-                                
-                    self.tensorboard.add_scalar(
-                        "learning_rate", lr_scheduler.get_last_lr()[0], train_progress.global_step
-                    )
+                    
+                    for i in range(0, len(lr_scheduler.get_last_lr())):
+                        self.tensorboard.add_scalar(
+                            f"learning_rate/{i}", lr_scheduler.get_last_lr()[i], train_progress.global_step
+                        )
                     self.tensorboard.add_scalar("loss", accumulated_loss, train_progress.global_step)
                     ema_loss = ema_loss or accumulated_loss
                     ema_loss = (ema_loss * 0.99) + (accumulated_loss * 0.01)
