@@ -63,7 +63,7 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             model: StableDiffusionModel,
             config: TrainConfig,
     ):
-        if model.text_encoder_lora is None:
+        if model.text_encoder_lora is None and config.train_text_encoder:
             model.text_encoder_lora = LoRAModuleWrapper(
                 model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
             )
@@ -77,16 +77,15 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
         model.unet.requires_grad_(False)
         model.vae.requires_grad_(False)
 
-        train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
-        model.text_encoder_lora.requires_grad_(train_text_encoder)
+        if config.train_text_encoder:
+            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+            model.text_encoder_lora.requires_grad_(train_text_encoder)
+            model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
+            model.text_encoder_lora.hook_to_module()
 
         train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
         model.unet_lora.requires_grad_(train_unet)
-
-        model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-
-        model.text_encoder_lora.hook_to_module()
         model.unet_lora.hook_to_module()
 
         if config.rescale_noise_scheduler_to_zero_terminal_snr:
@@ -136,8 +135,9 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             config: TrainConfig,
             train_progress: TrainProgress
     ):
-        train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
-        model.text_encoder_lora.requires_grad_(train_text_encoder)
+        if config.train_text_encoder:
+            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+            model.text_encoder_lora.requires_grad_(train_text_encoder)
 
         train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
         model.unet_lora.requires_grad_(train_unet)
