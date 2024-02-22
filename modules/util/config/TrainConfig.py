@@ -148,7 +148,7 @@ class TrainConfig(BaseConfig):
 
     # data settings
     concept_file_name: str
-    concepts: list[dict]
+    concepts: list[ConceptConfig]
     circular_mask_generation: bool
     random_rotate_and_crop: bool
     aspect_ratio_bucketing: bool
@@ -184,6 +184,7 @@ class TrainConfig(BaseConfig):
     mse_strength: float
     mae_strength: float
     vb_loss_strength: float
+    min_snr_gamma: float
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
 
@@ -203,6 +204,7 @@ class TrainConfig(BaseConfig):
     unet_weight_dtype: DataType
 
     # prior
+    prior_model_name: str
     train_prior: bool
     train_prior_epochs: int
     prior_learning_rate: float
@@ -272,7 +274,7 @@ class TrainConfig(BaseConfig):
 
     # sample settings
     sample_definition_file_name: str
-    samples: list[dict]
+    samples: list[SampleConfig]
     sample_after: float
     sample_after_unit: TimeUnit
     sample_image_format: ImageFormat
@@ -336,6 +338,7 @@ class TrainConfig(BaseConfig):
     def model_names(self) -> ModelNames:
         return ModelNames(
             base_model=self.base_model_name,
+            prior_model=self.prior_model_name,
             effnet_encoder_model=self.effnet_encoder_model_name,
             decoder_model=self.decoder_model_name,
             vae_model=self.vae_model_name,
@@ -349,13 +352,13 @@ class TrainConfig(BaseConfig):
         with open(config.concept_file_name, 'r') as f:
             concepts = json.load(f)
             for i in range(len(concepts)):
-                concepts[i] = ConceptConfig.default_values().from_dict(concepts[i]).to_dict()
+                concepts[i] = ConceptConfig.default_values().from_dict(concepts[i])
             config.concepts = concepts
 
         with open(config.sample_definition_file_name, 'r') as f:
             samples = json.load(f)
             for i in range(len(samples)):
-                samples[i] = SampleConfig.default_values().from_dict(samples[i]).to_dict()
+                samples[i] = SampleConfig.default_values().from_dict(samples[i])
             config.samples = samples
 
         return config.to_dict()
@@ -393,7 +396,7 @@ class TrainConfig(BaseConfig):
 
         # data settings
         data.append(("concept_file_name", "training_concepts/concepts.json", str, False))
-        data.append(("concepts", None, list[dict], True))
+        data.append(("concepts", None, list[ConceptConfig], True))
         data.append(("circular_mask_generation", False, bool, False))
         data.append(("random_rotate_and_crop", False, bool, False))
         data.append(("aspect_ratio_bucketing", True, bool, False))
@@ -429,6 +432,7 @@ class TrainConfig(BaseConfig):
         data.append(("mse_strength", 1.0, float, False))
         data.append(("mae_strength", 0.0, float, False))
         data.append(("vb_loss_strength", 1.0, float, False))
+        data.append(("min_snr_gamma", 0, float, False))
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
 
@@ -448,6 +452,7 @@ class TrainConfig(BaseConfig):
         data.append(("unet_weight_dtype", DataType.NONE, DataType, False))
 
         # prior
+        data.append(("prior_model_name", "", str, False))
         data.append(("train_prior", True, bool, False))
         data.append(("train_prior_epochs", 10000, int, False))
         data.append(("prior_learning_rate", None, float, True))
@@ -517,7 +522,7 @@ class TrainConfig(BaseConfig):
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
-        data.append(("samples", None, list[dict], True))
+        data.append(("samples", None, list[SampleConfig], True))
         data.append(("sample_after", 10, int, False))
         data.append(("sample_after_unit", TimeUnit.MINUTE, TimeUnit, False))
         data.append(("sample_image_format", ImageFormat.JPG, ImageFormat, False))
