@@ -46,15 +46,43 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
     ) -> Iterable[Parameter] | list[dict]:
         param_groups = list()
         
+
         if config.train_text_encoder:
-            param_groups.append(
-                self.create_param_groups(config, model.text_encoder_lora.parameters(), config.text_encoder_learning_rate)
-            )
+            if config.lora_te_separate_train:
+                ex_layer_name=""
+                params=[]
+                for key,module in model.text_encoder_lora.modules.items():
+                    layer_name = ".".join(key.split(".")[:4])
+                    if ex_layer_name != layer_name:
+                        if len(params) > 0:
+                            param_groups.append(
+                                self.create_param_groups(config, params, config.text_encoder_learning_rate)
+                            )
+                        params=[]
+                        ex_layer_name = layer_name
+                    params.extend(module.parameters())
+                param_groups.append(
+                    self.create_param_groups(config, params, config.text_encoder_learning_rate)
+                )
+            else:
+                param_groups.append(
+                    self.create_param_groups(config, model.text_encoder_lora.parameters(), config.text_encoder_learning_rate)
+                )
+            
 
         if config.train_unet:
-            param_groups.append(
+            if config.lora_unet_separate_train:
+                for key,modules in model.unet_lora.block_parameters().items():
+                    params=[]
+                    for module in modules:
+                        params.extend(module.parameters())
+                    param_groups.append(
+                        self.create_param_groups(config, params, config.unet_learning_rate)
+                    )
+            else:
+                param_groups.append(
                 self.create_param_groups(config, model.unet_lora.parameters(), config.unet_learning_rate)
-            )
+                )
 
         return param_groups
 
@@ -63,30 +91,29 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             model: StableDiffusionModel,
             config: TrainConfig,
     ):
-        if model.text_encoder_lora is None:
+        if model.text_encoder_lora is None and config.train_text_encoder:
             model.text_encoder_lora = LoRAModuleWrapper(
                 model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
             )
 
         if model.unet_lora is None:
             model.unet_lora = LoRAModuleWrapper(
-                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio
+                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio, config.lora_train_blocks
             )
 
         model.text_encoder.requires_grad_(False)
         model.unet.requires_grad_(False)
         model.vae.requires_grad_(False)
 
-        train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
-        model.text_encoder_lora.requires_grad_(train_text_encoder)
+        if config.train_text_encoder:
+            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+            model.text_encoder_lora.requires_grad_(train_text_encoder)
+            model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
+            model.text_encoder_lora.hook_to_module()
 
         train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
         model.unet_lora.requires_grad_(train_unet)
-
-        model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-
-        model.text_encoder_lora.hook_to_module()
         model.unet_lora.hook_to_module()
 
         if config.rescale_noise_scheduler_to_zero_terminal_snr:
@@ -136,8 +163,9 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             config: TrainConfig,
             train_progress: TrainProgress
     ):
-        train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
-        model.text_encoder_lora.requires_grad_(train_text_encoder)
+        if config.train_text_encoder:
+            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+            model.text_encoder_lora.requires_grad_(train_text_encoder)
 
         train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
         model.unet_lora.requires_grad_(train_unet)
