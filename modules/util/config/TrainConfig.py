@@ -66,6 +66,7 @@ class TrainOptimizerConfig(BaseConfig):
     use_triton: bool
     warmup_init: bool
     weight_decay: float
+    extra:dict
 
     def __init__(self, data: list[(str, Any, type, bool)]):
         super(TrainOptimizerConfig, self).__init__(data)
@@ -121,6 +122,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("use_triton", False, bool, False))
         data.append(("warmup_init", False, bool, False))
         data.append(("weight_decay", None, float, True))
+        data.append(("extra", {}, dict, False))
 
         return TrainOptimizerConfig(data)
 
@@ -260,6 +262,9 @@ class TrainConfig(BaseConfig):
     lora_modules: list[str]
     lora_rank_ratio:float
     lora_alpha_ratio:float
+    lora_train_blocks:list[int]
+    lora_te_separate_train:bool
+    lora_unet_separate_train:bool
 
     # optimizer
     optimizer: TrainOptimizerConfig
@@ -502,6 +507,9 @@ class TrainConfig(BaseConfig):
         data.append(("lora_modules", ["attentions"], list[str], False))
         data.append(("lora_rank_ratio", 0.0, float, False))
         data.append(("lora_alpha_ratio", 0.0, float, False))
+        data.append(("lora_train_blocks", None, list[int], False))
+        data.append(("lora_te_separate_train", False, bool, False))
+        data.append(("lora_unet_separate_train", False, bool, False))
 
         # optimizer
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))

@@ -12,5 +12,4 @@ train.bat
 config.json
 *.pyc
 *.bak
-Train_Variables
-Train_Variables_LORA
+*.txt
