@@ -1,6 +1,6 @@
 @echo off
 
-if not defined PYTHON (set PYTHON=python)
+set PYTHON=H:\stable-diffusion-webui\python\python.exe
 if not defined VENV_DIR (set "VENV_DIR=%~dp0%venv")
 
 :check_venv

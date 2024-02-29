@@ -59,6 +59,8 @@ def lr_lambda_cosine_with_hard_restarts(
     def lr_lambda(current_step: int):
         progress = float(current_step) / float(scheduler_steps)
         schedule = math.cos(((progress * num_cycles) % 1.0) * math.pi)
+        if progress >= 1.0:
+            return 0.0
         return max(0.0, 0.5 * (1.0 + schedule))
 
     return lr_lambda

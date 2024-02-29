@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoProcessor, Blip2ForConditionalGeneration
+from transformers import AutoProcessor, Blip2ForConditionalGeneration,OPTConfig,Blip2Config
 
 from modules.module.BaseImageCaptionModel import CaptionSample, BaseImageCaptionModel
 
@@ -9,10 +9,10 @@ class Blip2Model(BaseImageCaptionModel):
         self.device = device
         self.dtype = dtype
 
-        self.processor = AutoProcessor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        self.processor = AutoProcessor.from_pretrained("Salesforce/blip2-opt-6.7b")
 
         self.model = Blip2ForConditionalGeneration.from_pretrained(
-            "Salesforce/blip2-opt-2.7b",
+            "Salesforce/blip2-opt-6.7b",
             torch_dtype=self.dtype
         )
         self.model.eval()
