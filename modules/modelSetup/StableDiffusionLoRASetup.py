@@ -117,6 +117,8 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
 
         model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
+
+        model.text_encoder_lora.hook_to_module()
         model.unet_lora.hook_to_module()
 
         if config.rescale_noise_scheduler_to_zero_terminal_snr:
