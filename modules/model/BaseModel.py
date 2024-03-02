@@ -5,6 +5,7 @@ from torch.optim import Optimizer
 
 from modules.module.EMAModule import EMAModuleWrapper
 from modules.util.TrainProgress import TrainProgress
+from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.modelSpec.ModelSpec import ModelSpec
 
@@ -17,7 +18,7 @@ class BaseModel(metaclass=ABCMeta):
     ema_state_dict: dict | None
     train_progress: TrainProgress
     model_spec: ModelSpec | None
-    train_config: str | None
+    train_config: TrainConfig | None
 
     def __init__(
             self,
@@ -26,7 +27,7 @@ class BaseModel(metaclass=ABCMeta):
             ema_state_dict: dict | None,
             train_progress: TrainProgress,
             model_spec: ModelSpec | None,
-            train_config: str | None,
+            train_config: TrainConfig | None,
     ):
         self.model_type = model_type
         self.optimizer = None

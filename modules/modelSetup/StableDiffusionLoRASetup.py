@@ -31,10 +31,10 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
     ) -> Iterable[Parameter]:
         params = list()
 
-        if config.train_text_encoder:
+        if config.text_encoder.train:
             params += list(model.text_encoder_lora.parameters())
 
-        if config.train_unet:
+        if config.unet.train:
             params += list(model.unet_lora.parameters())
 
         return params
@@ -105,14 +105,17 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
         model.unet.requires_grad_(False)
         model.vae.requires_grad_(False)
 
-        if config.train_text_encoder:
-            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+        if model.text_encoder_lora is not None:
+            train_text_encoder = config.text_encoder.train and \
+                                 not self.stop_text_encoder_training_elapsed(config, model.train_progress)
             model.text_encoder_lora.requires_grad_(train_text_encoder)
-            model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_lora.hook_to_module()
 
-        train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
-        model.unet_lora.requires_grad_(train_unet)
+        if model.unet_lora is not None:
+            train_unet = config.unet.train and \
+                                 not self.stop_unet_training_elapsed(config, model.train_progress)
+            model.unet_lora.requires_grad_(train_unet)
+
+        model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.hook_to_module()
 
@@ -138,21 +141,21 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             config: TrainConfig,
     ):
         vae_on_train_device = self.debug_mode or config.align_prop
-        text_encoder_on_train_device = config.train_text_encoder or config.align_prop or not config.latent_caching
+        text_encoder_on_train_device = config.text_encoder.train or config.align_prop or not config.latent_caching
 
         model.text_encoder_to(self.train_device if text_encoder_on_train_device else self.temp_device)
         model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
         model.unet_to(self.train_device)
         model.depth_estimator_to(self.temp_device)
 
-        if config.train_text_encoder:
+        if config.text_encoder.train:
             model.text_encoder.train()
         else:
             model.text_encoder.eval()
 
         model.vae.eval()
 
-        if config.train_unet:
+        if config.unet.train:
             model.unet.train()
         else:
             model.unet.eval()
@@ -163,9 +166,12 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             config: TrainConfig,
             train_progress: TrainProgress
     ):
-        if config.train_text_encoder:
-            train_text_encoder = config.train_text_encoder and (model.train_progress.epoch < config.train_text_encoder_epochs)
+        if model.text_encoder_lora is not None:
+            train_text_encoder = config.text_encoder.train and \
+                                 not self.stop_text_encoder_training_elapsed(config, model.train_progress)
             model.text_encoder_lora.requires_grad_(train_text_encoder)
 
-        train_unet = config.train_unet and (model.train_progress.epoch < config.train_unet_epochs)
-        model.unet_lora.requires_grad_(train_unet)
+        if model.unet_lora is not None:
+            train_unet = config.unet.train and \
+                                 not self.stop_unet_training_elapsed(config, model.train_progress)
+            model.unet_lora.requires_grad_(train_unet)
