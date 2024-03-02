@@ -292,9 +292,7 @@ class GenericTrainer(BaseTrainer):
         is_custom_sample = False
         if not sample_params_list:
             if self.config.samples is not None:
-                samples=[]
-                for i in range(len(self.config.samples)):
-                    samples.append(SampleConfig.default_values().from_dict(self.config.samples[i]))
+                samples=self.config.samples
                 sample_params_list = samples
                 
             else:

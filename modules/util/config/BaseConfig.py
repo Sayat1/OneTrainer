@@ -86,6 +86,8 @@ class BaseConfig:
                         list_type = get_args(self.types[name])[0]
                         if data[name] is not None:
                             old_value = getattr(self, name) if hasattr(self, name) else []
+                            if old_value is None:
+                                old_value = []
                             value = []
                             for i in range(max(len(old_value), len(data[name]))):
                                 if i < len(old_value) and i < len(data[name]):
@@ -137,6 +139,8 @@ class BaseConfig:
                     else:
                         setattr(self, name, float(data[name]))
             except Exception:
+                import traceback
+                traceback.print_exc()
                 if name in data:
                     print(f"Could not set {name} as {str(data[name])}")
                 else:
