@@ -47,7 +47,7 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
         param_groups = list()
         
 
-        if config.train_text_encoder:
+        if config.text_encoder.train:
             if config.lora_te_separate_train:
                 ex_layer_name=""
                 params=[]
@@ -56,32 +56,32 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
                     if ex_layer_name != layer_name:
                         if len(params) > 0:
                             param_groups.append(
-                                self.create_param_groups(config, params, config.text_encoder_learning_rate)
+                                self.create_param_groups(config, params, config.text_encoder.learning_rate)
                             )
                         params=[]
                         ex_layer_name = layer_name
                     params.extend(module.parameters())
                 param_groups.append(
-                    self.create_param_groups(config, params, config.text_encoder_learning_rate)
+                    self.create_param_groups(config, params, config.text_encoder.learning_rate)
                 )
             else:
                 param_groups.append(
-                    self.create_param_groups(config, model.text_encoder_lora.parameters(), config.text_encoder_learning_rate)
+                    self.create_param_groups(config, model.text_encoder_lora.parameters(), config.text_encoder.learning_rate)
                 )
             
 
-        if config.train_unet:
+        if config.unet.train:
             if config.lora_unet_separate_train:
                 for key,modules in model.unet_lora.block_parameters().items():
                     params=[]
                     for module in modules:
                         params.extend(module.parameters())
                     param_groups.append(
-                        self.create_param_groups(config, params, config.unet_learning_rate)
+                        self.create_param_groups(config, params, config.unet.learning_rate)
                     )
             else:
                 param_groups.append(
-                self.create_param_groups(config, model.unet_lora.parameters(), config.unet_learning_rate)
+                self.create_param_groups(config, model.unet_lora.parameters(), config.unet.learning_rate)
                 )
 
         return param_groups
@@ -91,7 +91,7 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             model: StableDiffusionModel,
             config: TrainConfig,
     ):
-        if model.text_encoder_lora is None and config.train_text_encoder:
+        if model.text_encoder_lora is None and config.text_encoder.train:
             model.text_encoder_lora = LoRAModuleWrapper(
                 model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
             )

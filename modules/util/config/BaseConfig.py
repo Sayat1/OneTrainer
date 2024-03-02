@@ -139,8 +139,6 @@ class BaseConfig:
                     else:
                         setattr(self, name, float(data[name]))
             except Exception:
-                import traceback
-                traceback.print_exc()
                 if name in data:
                     print(f"Could not set {name} as {str(data[name])}")
                 else:
