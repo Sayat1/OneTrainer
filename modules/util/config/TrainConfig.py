@@ -63,6 +63,7 @@ class TrainOptimizerConfig(BaseConfig):
     relative_step: bool
     safeguard_warmup: bool
     scale_parameter: bool
+    stochastic_rounding: bool
     use_bias_correction: bool
     use_triton: bool
     warmup_init: bool
@@ -116,6 +117,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("relative_step", False, bool, False))
         data.append(("safeguard_warmup", False, bool, False))
         data.append(("scale_parameter", False, bool, False))
+        data.append(("stochastic_rounding", True, bool, False))
         data.append(("use_bias_correction", False, bool, False))
         data.append(("use_triton", False, bool, False))
         data.append(("warmup_init", False, bool, False))
@@ -238,6 +240,7 @@ class TrainConfig(BaseConfig):
     mae_strength: float
     vb_loss_strength: float
     min_snr_gamma: float
+    dropout_probability: float
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
 
@@ -570,6 +573,7 @@ class TrainConfig(BaseConfig):
         data.append(("mae_strength", 0.0, float, False))
         data.append(("vb_loss_strength", 1.0, float, False))
         data.append(("min_snr_gamma", 0, float, False))
+        data.append(("dropout_probability", 0.0, float, False))
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
 

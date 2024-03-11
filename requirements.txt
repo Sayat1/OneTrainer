@@ -29,7 +29,7 @@ open-clip-torch==2.23.0
 
 # data loader
 #-e git+https://github.com/Nerogar/mgds.git@4a2433c#egg=mgds
--e git+https://github.com/Sayat1/mgds.git@2eb6c08#egg=mgds
+-e git+https://github.com/Sayat1/mgds.git@b4a7818037267f3d9258a5ab7f39b2c0d7d9e350#egg=mgds
 
 # xformers
 xformers==0.0.23.post1

@@ -75,6 +75,11 @@ class WuerstchenLoRASetup(BaseWuerstchenSetup):
                 model.prior_prior, config.lora_rank, "lora_prior_unet", config.lora_alpha, ["attention"]
             )
 
+        if model.prior_text_encoder_lora:
+            model.prior_text_encoder_lora.set_dropout(config.dropout_probability)
+        if model.prior_prior_lora:
+            model.prior_prior_lora.set_dropout(config.dropout_probability)
+
         model.prior_text_encoder.requires_grad_(False)
         model.prior_prior.requires_grad_(False)
         if model.model_type.is_wuerstchen_v2():

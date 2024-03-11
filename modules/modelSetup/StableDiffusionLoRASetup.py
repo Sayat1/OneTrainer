@@ -45,7 +45,6 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             config: TrainConfig,
     ) -> Iterable[Parameter] | list[dict]:
         param_groups = list()
-        
 
         if config.text_encoder.train:
             if config.lora_te_separate_train:
@@ -100,6 +99,9 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             model.unet_lora = LoRAModuleWrapper(
                 model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio, config.lora_train_blocks
             )
+
+        model.text_encoder_lora.set_dropout(config.dropout_probability)
+        model.unet_lora.set_dropout(config.dropout_probability)
 
         model.text_encoder.requires_grad_(False)
         model.unet.requires_grad_(False)
