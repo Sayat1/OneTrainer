@@ -281,6 +281,7 @@ def create_optimizer(
                 foreach=optimizer_config.foreach if optimizer_config.optimizer_foreach is not None else False,
                 maximize=optimizer_config.maximize if optimizer_config.maximize is not None else False,
                 differentiable=optimizer_config.differentiable if optimizer_config.differentiable is not None else False,
+                **optimizer_config.extra
             )
 
         # SGD_8BIT Optimizer
@@ -293,6 +294,7 @@ def create_optimizer(
                 dampening=optimizer_config.dampening if optimizer_config.dampening is not None else 0,
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
                 nesterov=optimizer_config.nesterov if optimizer_config.nesterov is not None else False,
+                **optimizer_config.extra
             )
 
         # ADAM Optimizer
@@ -310,6 +312,7 @@ def create_optimizer(
                 capturable=optimizer_config.capturable if optimizer_config.capturable is not None else False,
                 differentiable=optimizer_config.differentiable if optimizer_config.differentiable is not None else False,
                 fused=optimizer_config.fused if optimizer_config.fused is not None else False,
+                **optimizer_config.extra
             )
 
             if optimizer_config.stochastic_rounding and not optimizer_config.fused and not optimizer_config.foreach:
@@ -332,6 +335,7 @@ def create_optimizer(
                 capturable=optimizer_config.capturable if optimizer_config.capturable is not None else False,
                 differentiable=optimizer_config.differentiable if optimizer_config.differentiable is not None else False,
                 fused=optimizer_config.fused if optimizer_config.fused is not None else False,
+                **optimizer_config.extra
             )
 
             if optimizer_config.stochastic_rounding and not optimizer_config.fused and not optimizer_config.foreach:
@@ -353,6 +357,7 @@ def create_optimizer(
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
                 is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
+                **optimizer_config.extra
             )
 
         # ADAMW_8BIT Optimizer
@@ -369,6 +374,7 @@ def create_optimizer(
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
                 is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
+                **optimizer_config.extra
             )
 
         # ADAGRAD Optimizer
@@ -381,6 +387,7 @@ def create_optimizer(
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-10,
                 lr_decay=optimizer_config.lr_decay if optimizer_config.lr_decay is not None else 0,
                 initial_accumulator_value=optimizer_config.initial_accumulator_value if optimizer_config.initial_accumulator_value is not None else 0,
+                **optimizer_config.extra
             )
 
         # ADAGRAD_8BIT Optimizer
@@ -396,6 +403,7 @@ def create_optimizer(
                 min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
+                **optimizer_config.extra
             )
 
         # RMSPROP Optimizer
@@ -409,6 +417,7 @@ def create_optimizer(
                 alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 0.99,
                 momentum=optimizer_config.momentum if optimizer_config.momentum is not None else 0,
                 centered=optimizer_config.centered if optimizer_config.centered is not None else False,
+                **optimizer_config.extra
             )
 
         # RMSPROP_8BIT Optimizer
@@ -425,6 +434,7 @@ def create_optimizer(
                 min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
+                **optimizer_config.extra
             )
 
         # LION Optimizer
@@ -437,6 +447,7 @@ def create_optimizer(
                        optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.99),
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
                 use_triton=optimizer_config.use_triton if optimizer_config.use_triton is not None else False,
+                **optimizer_config.extra
             )
 
         # LARS Optimizer
@@ -450,6 +461,7 @@ def create_optimizer(
                 dampening=optimizer_config.dampening if optimizer_config.dampening is not None else 0,
                 nesterov=optimizer_config.nesterov if optimizer_config.nesterov is not None else False,
                 max_unorm=optimizer_config.max_unorm if optimizer_config.max_unorm is not None else 0.02,
+                **optimizer_config.extra
             )
 
         # LARS_8BIT Optimizer
@@ -465,6 +477,7 @@ def create_optimizer(
                 min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 max_unorm=optimizer_config.max_unorm if optimizer_config.max_unorm is not None else 0.02,
+                **optimizer_config.extra
             )
 
         # LAMB Optimizer
@@ -482,6 +495,7 @@ def create_optimizer(
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else False,
                 max_unorm=optimizer_config.max_unorm if optimizer_config.max_unorm is not None else 1.0,
+                **optimizer_config.extra
             )
 
         # LAMB_8BIT Optimizer
@@ -500,6 +514,7 @@ def create_optimizer(
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else False,
                 max_unorm=optimizer_config.max_unorm if optimizer_config.max_unorm is not None else 1.0,
+                **optimizer_config.extra
             )
 
         # LION_8BIT Optimizer
@@ -515,6 +530,7 @@ def create_optimizer(
                 percentile_clipping=optimizer_config.percentile_clipping if optimizer_config.percentile_clipping is not None else 100,
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
                 is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
+                **optimizer_config.extra
             )
 
         # DADAPT_SGD Optimizer
@@ -529,6 +545,7 @@ def create_optimizer(
                 d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
                 growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
                 fsdp_in_use=optimizer_config.fsdp_in_use if optimizer_config.fsdp_in_use is not None else False,
+                **optimizer_config.extra
             )
 
         # DADAPT_ADAM Optimizer
@@ -547,6 +564,7 @@ def create_optimizer(
                 d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
                 growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
                 fsdp_in_use=optimizer_config.fsdp_in_use if optimizer_config.fsdp_in_use is not None else False,
+                **optimizer_config.extra
             )
 
         # DADAPT_ADAN Optimizer
@@ -564,6 +582,7 @@ def create_optimizer(
                 log_every=optimizer_config.log_every if optimizer_config.log_every is not None else 0,
                 d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
                 growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
+                **optimizer_config.extra
             )
 
         # DADAPT_ADA_GRAD Optimizer
@@ -578,6 +597,7 @@ def create_optimizer(
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 0.0,
                 d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
                 growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
+                **optimizer_config.extra
             )
 
         # DADAPT_LION Optimizer
@@ -592,6 +612,7 @@ def create_optimizer(
                 log_every=optimizer_config.log_every if optimizer_config.log_every is not None else 0,
                 d0=optimizer_config.d0 if optimizer_config.d0 is not None else 1e-6,
                 fsdp_in_use=optimizer_config.fsdp_in_use if optimizer_config.fsdp_in_use is not None else False,
+                **optimizer_config.extra
             )
 
         # PRODIGY Optimizer
@@ -636,6 +657,7 @@ def create_optimizer(
                 scale_parameter=optimizer_config.scale_parameter if optimizer_config.scale_parameter is not None else True,
                 relative_step=optimizer_config.relative_step if optimizer_config.relative_step is not None else True,
                 warmup_init=optimizer_config.warmup_init if optimizer_config.warmup_init is not None else False,
+                **optimizer_config.extra
             )
 
             if optimizer_config.stochastic_rounding:
