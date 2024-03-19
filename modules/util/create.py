@@ -330,7 +330,7 @@ def create_optimizer(
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
                 amsgrad=optimizer_config.amsgrad if optimizer_config.amsgrad is not None else False,
-                foreach=optimizer_config.foreach if optimizer_config.foreach is not None else False,
+                foreach=optimizer_config.foreach if optimizer_config.foreach is not None else None,
                 maximize=optimizer_config.maximize if optimizer_config.maximize is not None else False,
                 capturable=optimizer_config.capturable if optimizer_config.capturable is not None else False,
                 differentiable=optimizer_config.differentiable if optimizer_config.differentiable is not None else False,
