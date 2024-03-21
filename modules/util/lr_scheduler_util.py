@@ -68,11 +68,12 @@ def lr_lambda_cosine_with_hard_restarts(
 
 def lr_lambda_rex(
         scheduler_steps: int,
+        eta_min: float
 ):
     def lr_lambda(current_step: int):
         # https://arxiv.org/abs/2107.04197
         max_lr = 1
-        min_lr = 0
+        min_lr = eta_min
         d = 0.9
 
         if current_step < scheduler_steps:
@@ -81,5 +82,23 @@ def lr_lambda_rex(
             return min_lr + (max_lr - min_lr) * ((1 - progress) / div)
         else:
             return min_lr
+
+    return lr_lambda
+
+
+def lr_lambda_polynomial(
+    scheduler_steps: int,
+    eta_min: float,
+    power: float = 1.0
+):
+    def lr_lambda(current_step: int):
+        if current_step > scheduler_steps:
+            return eta_min
+        else:
+            lr_range = 1 - eta_min
+            decay_steps = scheduler_steps
+            pct_remaining = 1 - current_step / decay_steps
+            decay = lr_range * pct_remaining**power + eta_min
+            return decay / 1  # as LambdaLR multiplies by lr_init
 
     return lr_lambda

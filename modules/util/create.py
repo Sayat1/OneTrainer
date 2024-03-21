@@ -743,7 +743,14 @@ def create_lr_scheduler(
             )
         case LearningRateScheduler.REX:
             lr_lambda = lr_lambda_rex(
-                scheduler_steps
+                scheduler_steps,
+                eta_min
+            )
+        case LearningRateScheduler.POLYNOMIAL:
+            lr_lambda = lr_lambda_polynomial(
+                scheduler_steps,
+                eta_min,
+                1
             )
         case LearningRateScheduler.ADAFACTOR:
             from transformers.optimization import AdafactorSchedule
