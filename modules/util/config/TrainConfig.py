@@ -21,6 +21,7 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.torch_util import default_device
 
 
 class TrainOptimizerConfig(BaseConfig):
@@ -47,6 +48,7 @@ class TrainOptimizerConfig(BaseConfig):
     foreach: bool
     fsdp_in_use: bool
     fused: bool
+    fused_back_pass: bool
     growth_rate: float
     initial_accumulator_value: int
     is_paged: bool
@@ -101,6 +103,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("foreach", False, bool, True))  # Disabled, because it uses too much VRAM
         data.append(("fsdp_in_use", False, bool, False))
         data.append(("fused", False, bool, False))
+        data.append(("fused_back_pass", False, bool, False))
         data.append(("growth_rate", None, float, True))
         data.append(("initial_accumulator_value", None, int, True))
         data.append(("is_paged", False, bool, False))
@@ -226,6 +229,7 @@ class TrainConfig(BaseConfig):
     temp_device: str
     train_dtype: DataType
     fallback_train_dtype: DataType
+    enable_autocast_cache: bool
     only_cache: bool
     resolution: str
     attention_mechanism: AttentionMechanism
@@ -330,6 +334,7 @@ class TrainConfig(BaseConfig):
     save_after: float
     save_after_unit: TimeUnit
     rolling_save_count: int
+    save_filename_prefix: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
         super(TrainConfig, self).__init__(
@@ -555,10 +560,11 @@ class TrainConfig(BaseConfig):
         data.append(("ema", EMAMode.OFF, EMAMode, False))
         data.append(("ema_decay", 0.999, float, False))
         data.append(("ema_update_step_interval", 5, int, False))
-        data.append(("train_device", "cuda", str, False))
+        data.append(("train_device", default_device.type, str, False))
         data.append(("temp_device", "cpu", str, False))
         data.append(("train_dtype", DataType.FLOAT_16, DataType, False))
         data.append(("fallback_train_dtype", DataType.BFLOAT_16, DataType, False))
+        data.append(("enable_autocast_cache", True, bool, False))
         data.append(("only_cache", False, bool, False))
         data.append(("resolution", "512", str, False))
         data.append(("attention_mechanism", AttentionMechanism.XFORMERS, AttentionMechanism, False))
@@ -699,5 +705,6 @@ class TrainConfig(BaseConfig):
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
         data.append(("rolling_save_count", 1, int, False))
+        data.append(("save_filename_prefix", "", str, False))
 
         return TrainConfig(data)
