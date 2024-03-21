@@ -188,16 +188,16 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
             tensorboard
     ):
         lrs = scheduler.get_last_lr()
-        names = []
-        if config.text_encoder.train:
-            names.append("te")
-        if config.unet.train:
-            names.append("unet")
-        assert len(lrs) == len(names)
+        # names = []
+        # if config.text_encoder.train:
+        #     names.append("te")
+        # if config.unet.train:
+        #     names.append("unet")
+        # assert len(lrs) == len(names)
 
         lrs = config.optimizer.optimizer.maybe_adjust_lrs(lrs, model.optimizer)
 
-        for name, lr in zip(names, lrs):
+        for i, lr in enumerate(lrs):
             tensorboard.add_scalar(
-                f"lr/{name}", lr, model.train_progress.global_step
+                f"lr/{i}", lr, model.train_progress.global_step
             )

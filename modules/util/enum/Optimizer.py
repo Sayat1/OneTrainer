@@ -64,8 +64,13 @@ class Optimizer(Enum):
     # Small helper for adjusting learning rates to adaptive optimizers.
     def maybe_adjust_lrs(self, lrs, optimizer):
         if self.is_adaptive:
-            d = optimizer.param_groups[0]["d"]
-            return [lr * d if lr is not None else None for lr in lrs]
+            dlrs= []
+            for i,lr in enumerate(lrs):
+                if "dlr" in optimizer.param_groups[i]:
+                    dlrs.append(optimizer.param_groups[i]["dlr"])
+                else:
+                    dlrs.append(optimizer.param_groups[i]["d"] * optimizer.param_groups[i]["lr"])
+            return dlrs
         return lrs
 
     def __str__(self):
