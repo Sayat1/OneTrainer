@@ -693,7 +693,6 @@ def create_ema(
         parameters=parameters,
         decay=config.ema_decay,
         update_step_interval=config.ema_update_step_interval,
-        total_step=config,
         device=device,
     )
 
