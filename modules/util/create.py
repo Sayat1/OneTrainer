@@ -693,6 +693,7 @@ def create_ema(
         parameters=parameters,
         decay=config.ema_decay,
         update_step_interval=config.ema_update_step_interval,
+        total_step=config.
         device=device,
     )
 
@@ -707,15 +708,11 @@ def create_lr_scheduler(
         learning_rate_scheduler: LearningRateScheduler,
         warmup_steps: int,
         num_cycles: float,
-        num_epochs: int,
-        batch_size: int,
-        approximate_epoch_length: int,
+        total_steps: int,
         gradient_accumulation_steps: int,
         global_step: int = 0,
         eta_min: float = 0.0,
 ) -> LRScheduler:
-    steps_per_epoch = approximate_epoch_length / batch_size
-    total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
     warmup_steps = int(warmup_steps / gradient_accumulation_steps)
     scheduler_steps = total_steps - warmup_steps
 
