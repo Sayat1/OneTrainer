@@ -9,7 +9,6 @@ class EMAModuleWrapper:
             parameters: Iterable[torch.nn.Parameter],
             decay: float = 0.9999,
             update_step_interval: int = 1,
-            total_steps:int =0,
             device: torch.device | None = None,
     ):
         parameters = list(parameters)
@@ -18,7 +17,7 @@ class EMAModuleWrapper:
         self.temp_stored_parameters = None
 
         self.decay = decay
-        self.total_steps = total_steps
+        self.total_steps = 0
         self.update_step_interval = update_step_interval
         self.device = device
 
