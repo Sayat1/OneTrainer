@@ -492,10 +492,6 @@ class GenericTrainer(BaseTrainer):
             self.data_loader.get_data_set().start_next_epoch()
             self.model_setup.setup_train_device(self.model, self.config)
             torch_gc()
-            steps_per_epoch = self.data_loader.get_data_set().approximate_length() / self.config.batch_size
-            total_steps = int(steps_per_epoch * self.config.epochs / self.config.gradient_accumulation_steps)
-            if self.model.ema:
-                self.model.ema.total_steps = total_steps
 
             if lr_scheduler is None:
                 lr_scheduler = create.create_lr_scheduler(
@@ -503,7 +499,9 @@ class GenericTrainer(BaseTrainer):
                     learning_rate_scheduler=self.config.learning_rate_scheduler,
                     warmup_steps=self.config.learning_rate_warmup_steps,
                     num_cycles=self.config.learning_rate_cycles,
-                    total_steps= total_steps,
+                    num_epochs=self.config.epochs,
+                    approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
+                    batch_size=self.config.batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
                     global_step=train_progress.global_step,
                     eta_min = self.config.learning_rate_eta_min
@@ -587,7 +585,7 @@ class GenericTrainer(BaseTrainer):
 
                     self.model_setup.after_optimizer_step(self.model, self.config, train_progress)
                     if self.model.ema:
-                        update_step = train_progress.global_step // self.config.gradient_accumulation_steps
+                        update_step = train_progress.global_step // self.config.gradient_accumulation_steps * self.config.batch_size
                         self.tensorboard.add_scalar(
                             "ema_decay",
                             self.model.ema.get_current_decay(update_step),
