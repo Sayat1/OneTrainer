@@ -585,7 +585,7 @@ class GenericTrainer(BaseTrainer):
 
                     self.model_setup.after_optimizer_step(self.model, self.config, train_progress)
                     if self.model.ema:
-                        update_step = train_progress.global_step // self.config.gradient_accumulation_steps
+                        update_step = train_progress.global_step // self.config.gradient_accumulation_steps * self.config.batch_size
                         self.tensorboard.add_scalar(
                             "ema_decay",
                             self.model.ema.get_current_decay(update_step),
