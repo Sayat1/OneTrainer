@@ -24,7 +24,7 @@ pooch==1.8.0
 open-clip-torch==2.23.0
 
 # data loader
--e git+https://github.com/Sayat1/mgds.git@b4a7818037267f3d9258a5ab7f39b2c0d7d9e350#egg=mgds
+-e git+https://github.com/Sayat1/mgds.git#egg=mgds
 
 # optimizers
 dadaptation==3.2 # dadaptation optimizers

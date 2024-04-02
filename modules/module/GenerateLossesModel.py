@@ -2,7 +2,7 @@ import json
 import os
 
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from modules.dataLoader import StableDiffusionFineTuneDataLoader
 from modules.model.BaseModel import BaseModel

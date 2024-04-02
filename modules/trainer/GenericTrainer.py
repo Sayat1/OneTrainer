@@ -13,7 +13,7 @@ from torch import Tensor, nn
 from torch.nn import Parameter
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import pil_to_tensor
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from modules.dataLoader.StableDiffusionFineTuneDataLoader import StableDiffusionFineTuneDataLoader
 from modules.model.BaseModel import BaseModel

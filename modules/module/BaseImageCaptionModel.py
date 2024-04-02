@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Callable
 
 from PIL import Image
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from modules.util import path_util
 
