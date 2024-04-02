@@ -5,7 +5,7 @@ from typing import Callable
 
 import torch
 from PIL.Image import Image
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from modules.model.PixArtAlphaModel import PixArtAlphaModel
 from modules.modelSampler.BaseModelSampler import BaseModelSampler

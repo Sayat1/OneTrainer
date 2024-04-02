@@ -6,7 +6,7 @@ import torch
 from PIL import Image
 from torch import Tensor
 from torchvision.transforms import transforms
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from modules.util import path_util
 

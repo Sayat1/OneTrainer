@@ -5,7 +5,7 @@ from typing import Callable
 
 import torch
 from PIL.Image import Image
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from modules.model.StableDiffusionXLModel import StableDiffusionXLModel
 from modules.modelSampler.BaseModelSampler import BaseModelSampler

@@ -13,7 +13,7 @@ from torch import Tensor, nn
 from torch.nn import Parameter
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import pil_to_tensor
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from modules.dataLoader.StableDiffusionFineTuneDataLoader import StableDiffusionFineTuneDataLoader
 from modules.model.BaseModel import BaseModel
@@ -486,7 +486,7 @@ class GenericTrainer(BaseTrainer):
         lr_scheduler = None
         accumulated_loss = 0.0
         ema_loss = None
-        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1), desc="epoch"):
+        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0, file=sys.stdout, desc="epoch"):
             self.callbacks.on_update_status("starting epoch/caching")
 
             self.data_loader.get_data_set().start_next_epoch()
@@ -508,7 +508,7 @@ class GenericTrainer(BaseTrainer):
                 )
 
             current_epoch_length = len(self.data_loader.get_data_loader()) + train_progress.epoch_step
-            step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step")
+            step_tqdm = tqdm(self.data_loader.get_data_loader(),position=0, file=sys.stdout, desc="step")
             for epoch_step, batch in enumerate(step_tqdm):
                 if self.__needs_sample(train_progress) or self.commands.get_and_reset_sample_default_command():
                     self.__enqueue_sample_during_training(
