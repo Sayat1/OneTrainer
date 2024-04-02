@@ -468,7 +468,7 @@ class GenericTrainer(BaseTrainer):
 
         if self.config.only_cache:
             self.callbacks.on_update_status("caching")
-            for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0, file=sys.stdout, desc="epoch")):
+            for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch")):
                 self.data_loader.get_data_set().start_next_epoch()
             return
 
@@ -486,7 +486,8 @@ class GenericTrainer(BaseTrainer):
         lr_scheduler = None
         accumulated_loss = 0.0
         ema_loss = None
-        for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0, file=sys.stdout, desc="epoch")):
+        for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch")):
+            print("")
             self.callbacks.on_update_status("starting epoch/caching")
 
             self.data_loader.get_data_set().start_next_epoch()
