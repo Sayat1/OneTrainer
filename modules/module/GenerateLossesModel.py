@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import torch
 from tqdm import tqdm
@@ -75,7 +76,7 @@ class GenerateLossesModel:
         )
 
         self.data_loader.get_data_set().start_next_epoch()
-        step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step")
+        step_tqdm = tqdm(self.data_loader.get_data_loader(),position=0, file=sys.stdout, desc="step")
 
         self.model_setup.setup_train_device(self.model, self.config)
 
