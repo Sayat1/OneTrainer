@@ -677,8 +677,9 @@ def create_optimizer(
                 betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
                        optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999,
                        optimizer_config.beta3 if optimizer_config.beta3 is not None else 0.9999),
-                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
-                stochastic_rounding=optimizer_config.stochastic_rounding
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.01,
+                stochastic_rounding=optimizer_config.stochastic_rounding,
+                **optimizer_config.extra
             )
 
     if state_dict is not None:
