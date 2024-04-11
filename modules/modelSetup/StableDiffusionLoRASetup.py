@@ -92,12 +92,12 @@ class StableDiffusionLoRASetup(BaseStableDiffusionSetup):
     ):
         if model.text_encoder_lora is None and config.text_encoder.train:
             model.text_encoder_lora = LoRAModuleWrapper(
-                model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
+                model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha, dora_wd=config.lora_dora_wd
             )
 
         if model.unet_lora is None:
             model.unet_lora = LoRAModuleWrapper(
-                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio, config.lora_train_blocks
+                model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio, config.lora_train_blocks, dora_wd=config.lora_dora_wd
             )
 
         if model.text_encoder_lora is not None and config.text_encoder.train:
