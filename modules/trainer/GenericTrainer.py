@@ -56,6 +56,16 @@ class GenericTrainer(BaseTrainer):
     def __init__(self, config: TrainConfig, callbacks: TrainCallbacks, commands: TrainCommands):
         super(GenericTrainer, self).__init__(config, callbacks, commands)
 
+        import random
+        import numpy as np
+        if config.seed is None or config.seed == -1:
+            config.seed = random.randint(0, 2**32)
+        print(f"set seed:{config.seed}")
+        random.seed(config.seed)
+        np.random.seed(config.seed)
+        torch.manual_seed(config.seed)
+        torch.cuda.manual_seed_all(config.seed)
+
         tensorboard_log_dir = os.path.join(config.workspace_dir, "tensorboard")
         os.makedirs(Path(tensorboard_log_dir).absolute(), exist_ok=True)
         self.tensorboard = SummaryWriter(os.path.join(tensorboard_log_dir, get_string_timestamp()))
