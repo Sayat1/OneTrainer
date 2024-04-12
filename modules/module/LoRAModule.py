@@ -76,19 +76,24 @@ class LoRAModule(metaclass=ABCMeta):
         self.orig_forward = self.orig_module.forward if self.orig_module is not None else None
 
     def forward(self, x, *args, **kwargs):
-        dtype = next(self.lora_up.parameters()).dtype
-        weight = (
-                self.orig_module.weight.data.to(device=x.device, dtype=dtype)
-                + self.make_weight(x.device).to(device=x.device, dtype=dtype) * (self.alpha / self.rank)
-            )
         if self.wd:
+            dtype = next(self.lora_up.parameters()).dtype
+            weight = (
+                    self.orig_module.weight.data.to(device=x.device, dtype=dtype)
+                    + self.make_weight(x.device).to(device=x.device, dtype=dtype) * (self.alpha / self.rank)
+                )
             weight = self.apply_weight_decompose(weight)
-        bias = (
-                None
-                if self.orig_module.bias is None
-                else self.orig_module.bias.data
-            )
-        return self.op(x, weight, bias, **self.extra_args)
+            bias = (
+                    None
+                    if self.orig_module.bias is None
+                    else self.orig_module.bias.data
+                )
+            return self.op(x, weight, bias, **self.extra_args)
+        elif self.orig_module.training:
+            ld = self.lora_up(self.dropout(self.lora_down(x)))
+            return self.orig_forward(x) + ld * (self.alpha / self.rank)
+        else:
+            return self.orig_forward(x) + self.lora_up(self.lora_down(x)) * (self.alpha / self.rank)
 
     def requires_grad_(self, requires_grad: bool):
         self.lora_down.requires_grad_(requires_grad)
