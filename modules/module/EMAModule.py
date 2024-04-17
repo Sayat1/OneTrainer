@@ -32,7 +32,7 @@ class EMAModuleWrapper:
 
     def get_current_decay(self, optimization_step) -> float:
         return min(
-            ((1*self.batch_size) + optimization_step) / (10 + optimization_step),
+            (1*min(self.batch_size,9) + optimization_step) / (10 + optimization_step),
             self.decay
         )
 
