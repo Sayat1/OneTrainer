@@ -10,6 +10,7 @@ class EMAModuleWrapper:
             decay: float = 0.9999,
             update_step_interval: int = 1,
             device: torch.device | None = None,
+            batch_size: int =1 
     ):
         parameters = list(parameters)
         self.ema_parameters = [p.clone().detach().to(device) for p in parameters]
@@ -19,6 +20,7 @@ class EMAModuleWrapper:
         self.decay = decay
         self.update_step_interval = update_step_interval
         self.device = device
+        self.batch_size = batch_size
 
         # TODO: add an automatic decay calculation based on this formula:
         # The impact of the last n steps can be calculated as:
@@ -30,7 +32,7 @@ class EMAModuleWrapper:
 
     def get_current_decay(self, optimization_step) -> float:
         return min(
-            (1 + optimization_step) / (10 + optimization_step),
+            ((1*self.batch_size) + optimization_step) / (10 + optimization_step),
             self.decay
         )
 
