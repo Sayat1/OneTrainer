@@ -10,7 +10,8 @@ class EMAModuleWrapper:
             decay: float = 0.9999,
             update_step_interval: int = 1,
             device: torch.device | None = None,
-            batch_size: int =1 
+            batch_size: int =1,
+            gradient_accumulation:int =1
     ):
         parameters = list(parameters)
         self.ema_parameters = [p.clone().detach().to(device) for p in parameters]
@@ -21,6 +22,7 @@ class EMAModuleWrapper:
         self.update_step_interval = update_step_interval
         self.device = device
         self.batch_size = batch_size
+        self.gradient_accumulation = gradient_accumulation
 
         # TODO: add an automatic decay calculation based on this formula:
         # The impact of the last n steps can be calculated as:
@@ -42,7 +44,7 @@ class EMAModuleWrapper:
 
         one_minus_decay = 1 - self.get_current_decay(optimization_step)
 
-        if (optimization_step + 1) % self.update_step_interval == 0:
+        if (optimization_step + 1) % (self.update_step_interval * self.gradient_accumulation) == 0:
             for ema_parameter, parameter in zip(self.ema_parameters, parameters):
                 if parameter.requires_grad:
                     if ema_parameter.device == parameter.device:
