@@ -96,8 +96,9 @@ class LoRAModule(metaclass=ABCMeta):
             return self.orig_forward(x) + self.lora_up(self.lora_down(x)) * (self.alpha / self.rank)
 
     def requires_grad_(self, requires_grad: bool):
-        self.lora_down.requires_grad_(requires_grad)
-        self.lora_up.requires_grad_(requires_grad)
+        if requires_grad==False or self.requires_train:
+            self.lora_down.requires_grad_(requires_grad)
+            self.lora_up.requires_grad_(requires_grad)
 
     def to(self, device: torch.device = None, dtype: torch.dtype = None) -> 'LoRAModule':
         self.lora_down.to(device, dtype)
@@ -172,7 +173,7 @@ class LoRAModule(metaclass=ABCMeta):
 
 
 class LinearLoRAModule(LoRAModule):
-    def __init__(self, prefix: str, orig_module: Linear, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float, dora_wd: bool):
+    def __init__(self, prefix: str, orig_module: Linear, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float, dora_wd: bool, requires_train: bool):
         in_features = orig_module.in_features
         out_features = orig_module.out_features
         my_rank = rank
@@ -185,13 +186,16 @@ class LinearLoRAModule(LoRAModule):
         self.extra_args = {}
         self.lora_down = Linear(in_features, my_rank, bias=False, device=orig_module.weight.device)
         self.lora_up = Linear(my_rank, out_features, bias=False, device=orig_module.weight.device)
-        
+        self.lora_down.requires_grad_(False)
+        self.lora_up.requires_grad_(False)
+        self.requires_train=requires_train
+
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
 
 
 class Conv2dLoRAModule(LoRAModule):
-    def __init__(self, prefix: str, orig_module: Conv2d, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float, dora_wd: bool):
+    def __init__(self, prefix: str, orig_module: Conv2d, rank: int, alpha: float, rank_ratio: float, alpha_ratio: float, dora_wd: bool, requires_train: bool):
         in_channels = orig_module.in_channels
         out_channels = orig_module.out_channels
         my_rank = rank
@@ -213,6 +217,9 @@ class Conv2dLoRAModule(LoRAModule):
         
         self.lora_down = Conv2d(in_channels, my_rank, kernel_size,stride,padding, bias=False, device=orig_module.weight.device)
         self.lora_up = Conv2d(my_rank, out_channels, (1, 1), (1, 1), bias=False, device=orig_module.weight.device)
+        self.lora_down.requires_grad_(False)
+        self.lora_up.requires_grad_(False)
+        self.requires_train=requires_train
 
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
@@ -308,16 +315,15 @@ class LoRAModuleWrapper:
                         block_idx = get_block_index(lora_name)
                         if block_idx != -1:
                             training_block = train_blocks[block_idx] == 1
-                    if training_block:
-                        if isinstance(module, Linear):
-                            print(self.prefix + "_" + name + f" dora:{dora_wd}")
-                            lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, module, rank, alpha, rank_ratio, alpha_ratio, dora_wd)
-                        elif isinstance(module, Conv2d):
-                            print(self.prefix + "_" + name + f" dora:{dora_wd}")
-                            if module.kernel_size == (1,1):
-                                lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, module, rank, alpha, rank_ratio, alpha_ratio, dora_wd)
-                            elif conv_rank > 0:
-                                lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, module, conv_rank, conv_alpha, rank_ratio, alpha_ratio, dora_wd)
+                    if isinstance(module, Linear):
+                        print(self.prefix + "_" + name + f" trainb:{training_block}")
+                        lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, module, rank, alpha, rank_ratio, alpha_ratio, dora_wd, training_block)
+                    elif isinstance(module, Conv2d):
+                        print(self.prefix + "_" + name + f" trainb:{training_block}")
+                        if module.kernel_size == (1,1):
+                            lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, module, rank, alpha, rank_ratio, alpha_ratio, dora_wd, training_block)
+                        elif conv_rank > 0:
+                            lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, module, conv_rank, conv_alpha, rank_ratio, alpha_ratio, dora_wd, training_block)
 
         return lora_modules
 
