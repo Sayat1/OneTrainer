@@ -88,14 +88,16 @@ class StableDiffusionModel(BaseModel):
             lora_state_dict: dict | None = None,
             sd_config: dict | None = None,
             sd_config_filename: str | None = None,
-            model_spec: ModelSpec | None = None
+            model_spec: ModelSpec | None = None,
+            train_config: TrainConfig | None = None,
     ):
         super(StableDiffusionModel, self).__init__(
             model_type=model_type,
             optimizer_state_dict=optimizer_state_dict,
             ema_state_dict=ema_state_dict,
             train_progress=train_progress,
-            model_spec=model_spec
+            model_spec=model_spec,
+            train_config=train_config,
         )
 
         self.tokenizer = tokenizer
