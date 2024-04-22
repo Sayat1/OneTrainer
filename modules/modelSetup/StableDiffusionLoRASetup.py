@@ -131,23 +131,27 @@ class StableDiffusionLoRASetup(
         if config.train_any_embedding():
             model.text_encoder.get_input_embeddings().to(dtype=config.embedding_weight_dtype.torch_dtype())
 
-        model.text_encoder_lora = LoRAModuleWrapper(
-            model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha, dora_wd=config.lora_dora_wd
-        )
+        if config.text_encoder.train:
+            model.text_encoder_lora = LoRAModuleWrapper(
+                model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha, dora_wd=config.lora_dora_wd
+            )
 
         model.unet_lora = LoRAModuleWrapper(
             model.unet, config.lora_rank, "lora_unet", config.lora_alpha, config.lora_modules, config.lora_conv_rank, config.lora_conv_alpha, config.lora_rank_ratio, config.lora_alpha_ratio, config.lora_train_blocks, dora_wd=config.lora_dora_wd
         )
 
         if model.lora_state_dict:
-            model.text_encoder_lora.load_state_dict(model.lora_state_dict)
+            if config.text_encoder.train:
+                model.text_encoder_lora.load_state_dict(model.lora_state_dict)
             model.unet_lora.load_state_dict(model.lora_state_dict)
             model.lora_state_dict = None
 
-        model.text_encoder_lora.set_dropout(config.dropout_probability)
+        if config.text_encoder.train:
+            model.text_encoder_lora.set_dropout(config.dropout_probability)
         model.unet_lora.set_dropout(config.dropout_probability)
 
-        model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
+        if config.text_encoder.train:
+            model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
 
         if model.text_encoder_lora is not None and config.text_encoder.train:
