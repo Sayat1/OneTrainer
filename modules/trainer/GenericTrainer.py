@@ -175,14 +175,15 @@ class GenericTrainer(BaseTrainer):
         return None
 
     def __prune_backups(self, backups_to_keep: int):
-        backup_dirpath = os.path.join(self.config.workspace_dir, "backup")
+        backup_dirpath = os.path.abspath(os.path.join(self.config.workspace_dir, "backup"))
+        print("__prune_backups")
         if os.path.exists(backup_dirpath):
             backup_directories = sorted(
                 [dirpath for dirpath in os.listdir(backup_dirpath) if
                  os.path.isdir(os.path.join(backup_dirpath, dirpath))],
                 reverse=True,
             )
-
+            print(backup_dirpath)
             for dirpath in backup_directories[backups_to_keep:]:
                 dirpath = os.path.join(backup_dirpath, dirpath)
                 try:
