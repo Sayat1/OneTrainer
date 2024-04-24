@@ -386,7 +386,7 @@ class GenericTrainer(BaseTrainer):
                 pass
         finally:
             if self.config.rolling_backup:
-                self.__prune_backups(self.config.rolling_backup_count-1)
+                self.__prune_backups(self.config.rolling_backup_count)
 
         self.model_setup.setup_train_device(self.model, self.config)
 
