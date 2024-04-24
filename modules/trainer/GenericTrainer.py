@@ -389,7 +389,10 @@ class GenericTrainer(BaseTrainer):
             if self.config.rolling_backup:
                 self.__prune_backups(self.config.rolling_backup_count)
 
-        self.model_setup.setup_train_device(self.model, self.config)
+        try:
+            self.model_setup.setup_train_device(self.model, self.config)
+        except:
+            traceback.print_exc()
 
         torch_gc()
 
