@@ -358,11 +358,11 @@ class GenericTrainer(BaseTrainer):
         self.callbacks.on_update_status("creating backup")
 
         backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}"
-        backup_path = os.path.join(self.config.workspace_dir, "backup", backup_name)
+        #backup_path = os.path.join(self.config.workspace_dir, "backup", backup_name)
+        backup_path = os.path.abspath(os.path.join(self.config.workspace_dir, "backup", backup_name))
+
 
         try:
-            if self.config.rolling_backup:
-                self.__prune_backups(self.config.rolling_backup_count-1)
             print("Creating Backup " + backup_path)
 
             self.model_saver.save(
@@ -385,7 +385,8 @@ class GenericTrainer(BaseTrainer):
                 print("Could not delete partial backup")
                 pass
         finally:
-            pass
+            if self.config.rolling_backup:
+                self.__prune_backups(self.config.rolling_backup_count-1)
 
         self.model_setup.setup_train_device(self.model, self.config)
 
