@@ -190,30 +190,7 @@ class StableDiffusionModel(BaseModel):
                 feature_extractor=None,
                 requires_safety_checker=False,
             )
-        
-    def create_pipeline_without_unet(self)  -> DiffusionPipeline:
-        return StableDiffusionPipeline(
-                vae=self.vae,
-                text_encoder=self.text_encoder,
-                tokenizer=self.tokenizer,
-                unet=None,
-                scheduler=self.noise_scheduler,
-                safety_checker=None,
-                feature_extractor=None,
-                requires_safety_checker=False,
-            )
-    
-    def create_pipeline_unet(self)  -> DiffusionPipeline:
-        return StableDiffusionPipeline(
-                vae=None,
-                text_encoder=None,
-                tokenizer=None,
-                unet=self.unet,
-                scheduler=None,
-                safety_checker=None,
-                feature_extractor=None,
-                requires_safety_checker=False,
-            )
+
 
     def force_v_prediction(self):
         self.noise_scheduler.config.prediction_type = 'v_prediction'

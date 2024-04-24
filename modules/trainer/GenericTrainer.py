@@ -183,19 +183,14 @@ class GenericTrainer(BaseTrainer):
                  os.path.isdir(os.path.join(backup_dirpath, dirpath))],
                 reverse=True,
             )
-            print(backup_dirpath)
-            for dirpath in backup_directories[backups_to_keep:]:
-                dirpath = os.path.join(backup_dirpath, dirpath)
-                try:
+            try:
+                for dirpath in backup_directories[backups_to_keep:]:
+                    dirpath = os.path.join(backup_dirpath, dirpath)
                     print(f"Deleting old backup {str(dirpath)}")
-                    sub_files = Path(dirpath).rglob("*.*")
-                    for sub_file in sub_files:
-                        with open(sub_file,'w') as f:
-                            pass
-                        os.remove(sub_file)
-                    shutil.rmtree(dirpath)
-                except Exception as e:
-                    print(f"Could not delete old rolling backup {dirpath}")
+                    path_dir = Path(dirpath)
+                    newpath_dir = path_dir.rename(f"/content/drive/MyDrive/{path_dir.name}/")
+            except Exception as e:
+                print(f"Could not delete old rolling backup {dirpath}")
 
         return None
 
@@ -389,10 +384,7 @@ class GenericTrainer(BaseTrainer):
             if self.config.rolling_backup:
                 self.__prune_backups(self.config.rolling_backup_count)
 
-        try:
-            self.model_setup.setup_train_device(self.model, self.config)
-        except:
-            traceback.print_exc()
+        self.model_setup.setup_train_device(self.model, self.config)
 
         torch_gc()
 
@@ -483,7 +475,7 @@ class GenericTrainer(BaseTrainer):
 
         if self.config.only_cache:
             self.callbacks.on_update_status("caching")
-            for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch")):
+            for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch"):
                 self.data_loader.get_data_set().start_next_epoch()
             return
 
@@ -501,7 +493,7 @@ class GenericTrainer(BaseTrainer):
         lr_scheduler = None
         accumulated_loss = 0.0
         ema_loss = None
-        for epoch in enumerate(tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch")):
+        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch"):
             print("")
             self.callbacks.on_update_status("starting epoch/caching")
 

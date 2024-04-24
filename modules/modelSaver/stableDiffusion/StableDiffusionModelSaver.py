@@ -11,7 +11,6 @@ from modules.modelSaver.mixin.DtypeModelSaverMixin import DtypeModelSaverMixin
 from modules.util.convert.convert_sd_diffusers_to_ckpt import convert_sd_diffusers_to_ckpt
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.ModelType import ModelType
-from modules.util.torch_util import torch_gc
 
 class StableDiffusionModelSaver(
     DtypeModelSaverMixin,
@@ -23,16 +22,19 @@ class StableDiffusionModelSaver(
             destination: str,
             dtype: torch.dtype | None,
     ):
-        torch_gc()
+        # Copy the model to cpu by first moving the original model to cpu. This preserves some VRAM.
         pipeline = model.create_pipeline()
         original_device = pipeline.device
-        pipeline.to("cpu", dtype=dtype, silence_dtype_warnings=True)
-        print("save1")
-        os.makedirs(Path(destination).absolute(), exist_ok=True)
-        pipeline.save_pretrained(destination)
+        pipeline.to("cpu")
+        pipeline_copy = copy.deepcopy(pipeline)
         pipeline.to(original_device)
-        print("save2")
-        del pipeline
+
+        pipeline_copy.to(device="cpu", dtype=dtype, silence_dtype_warnings=True)
+
+        os.makedirs(Path(destination).absolute(), exist_ok=True)
+        pipeline_copy.save_pretrained(destination)
+
+        del pipeline_copy
 
     def __save_ckpt(
             self,
@@ -68,7 +70,6 @@ class StableDiffusionModelSaver(
             destination: str,
             dtype: torch.dtype | None,
     ):
-        torch_gc()
         state_dict = convert_sd_diffusers_to_ckpt(
             model_type,
             model.vae.state_dict(),

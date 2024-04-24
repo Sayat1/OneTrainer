@@ -154,7 +154,7 @@ class StableDiffusionLoRASetup(
             model.text_encoder_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
 
-        if model.text_encoder_lora is not None and config.text_encoder.train:
+        if config.text_encoder.train:
             model.text_encoder_lora.hook_to_module()
         model.unet_lora.hook_to_module()
 
