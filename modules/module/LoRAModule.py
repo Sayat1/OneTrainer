@@ -69,7 +69,6 @@ class LoRAModule(metaclass=ABCMeta):
             ).float()
             if orig_module is not None:
                 self.dora_scale.to(orig_module.weight.device)
-            self.dora_scale.requires_grad_(False)
 
         if orig_module is not None:
             self.alpha = self.alpha.to(orig_module.weight.device)
