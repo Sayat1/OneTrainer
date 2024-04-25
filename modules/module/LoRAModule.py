@@ -67,10 +67,14 @@ class LoRAModule(metaclass=ABCMeta):
                 .reshape(org_weight.shape[1], *[1] * self.dora_norm_dims)
                 .transpose(1, 0)
             ).float()
+            if orig_module is not None:
+                self.dora_scale.to(orig_module.weight.device)
+            self.dora_scale.requires_grad_(False)
 
         if orig_module is not None:
             self.alpha = self.alpha.to(orig_module.weight.device)
         self.alpha.requires_grad_(False)
+        
 
         self.is_applied = False
         self.orig_forward = self.orig_module.forward if self.orig_module is not None else None
@@ -119,7 +123,8 @@ class LoRAModule(metaclass=ABCMeta):
             "weight": state_dict.pop(self.prefix + ".lora_up.weight")
         }
         self.alpha = state_dict.pop(self.prefix + ".alpha")
-
+        if self.wd:
+            self.dora_scale = state_dict.pop(self.prefix + ".dora_scale")
         self.lora_down.load_state_dict(down_state_dict)
         self.lora_up.load_state_dict(up_state_dict)
 
