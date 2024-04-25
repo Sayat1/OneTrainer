@@ -122,8 +122,6 @@ class LoRAModule(metaclass=ABCMeta):
             "weight": state_dict.pop(self.prefix + ".lora_up.weight")
         }
         self.alpha = state_dict.pop(self.prefix + ".alpha")
-        if self.wd:
-            self.dora_scale = state_dict.pop(self.prefix + ".dora_scale")
         self.lora_down.load_state_dict(down_state_dict)
         self.lora_up.load_state_dict(up_state_dict)
 
@@ -252,6 +250,8 @@ class DummyLoRAModule(LoRAModule):
             self.prefix + ".lora_up.weight": state_dict.pop(self.prefix + ".lora_up.weight"),
             self.prefix + ".alpha": state_dict.pop(self.prefix + ".alpha"),
         }
+        if self.wd:
+            self.save_state_dict.update({self.prefix + ".dora_scale": state_dict.pop(self.prefix + ".dora_scale")})
 
     def state_dict(self) -> dict:
         return self.save_state_dict
