@@ -154,6 +154,9 @@ class LoRAModule(metaclass=ABCMeta):
             .transpose(0, 1)
         )
         return weight * (self.dora_scale / weight_norm)
+    
+    def modules(self) -> list[nn.Module]:
+        return [self.lora_down, self.lora_up, self.dropout]
 
     def hook_to_module(self):
         if not self.is_applied:
@@ -256,6 +259,9 @@ class DummyLoRAModule(LoRAModule):
     def state_dict(self) -> dict:
         return self.save_state_dict
 
+    def modules(self) -> list[nn.Module]:
+        return []
+
     def hook_to_module(self):
         pass
 
@@ -273,7 +279,7 @@ class LoRAModuleWrapper:
     orig_module: nn.Module
     rank: int
 
-    modules: dict[str, LoRAModule]
+    lora_modules: dict[str, LoRAModule]
 
     def __init__(
             self,
@@ -304,7 +310,7 @@ class LoRAModuleWrapper:
             if not all(block==1 or block==0 for block in train_blocks):
                 raise KeyError("train_blocks must have the value 0 or 1")
 
-        self.modules = self.__create_modules(orig_module, rank,alpha, conv_rank, conv_alpha, rank_ratio, alpha_ratio,train_blocks,dora_wd)
+        self.lora_modules = self.__create_modules(orig_module, rank,alpha, conv_rank, conv_alpha, rank_ratio, alpha_ratio,train_blocks,dora_wd)
 
     def __create_modules(self, orig_module: nn.Module | None,rank:int, alpha: float, conv_rank:int, conv_alpha:float, rank_ratio:float, alpha_ratio:float ,train_blocks:list[int],dora_wd:bool) -> dict[str, LoRAModule]:
         lora_modules = {}
@@ -332,18 +338,18 @@ class LoRAModuleWrapper:
         return lora_modules
 
     def requires_grad_(self, requires_grad: bool):
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.requires_grad_(requires_grad)
 
     def parameters(self) -> list[Parameter]:
         parameters = []
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             parameters += module.parameters()
         return parameters
 
     def block_parameters(self) -> dict:
         block_idx_to_lora = {}
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             idx = get_block_index(name.replace(".", "_") )
             if idx not in block_idx_to_lora:
                 block_idx_to_lora[idx] = []
@@ -351,7 +357,7 @@ class LoRAModuleWrapper:
         return block_idx_to_lora
 
     def to(self, device: torch.device = None, dtype: torch.dtype = None) -> 'LoRAModuleWrapper':
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.to(device, dtype)
         return self
 
@@ -366,7 +372,7 @@ class LoRAModuleWrapper:
         # create a copy, so the modules can pop states
         state_dict = {k: v for (k, v) in state_dict.items() if k.startswith(self.prefix)}
 
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.load_state_dict(state_dict)
 
         # create dummy modules for the remaining keys
@@ -376,7 +382,7 @@ class LoRAModuleWrapper:
                 prefix = name.removesuffix(".alpha")
                 module = DummyLoRAModule(prefix)
                 module.load_state_dict(state_dict)
-                self.modules[prefix] = module
+                self.lora_modules[prefix] = module
 
     def state_dict(self) -> dict:
         """
@@ -384,44 +390,54 @@ class LoRAModuleWrapper:
         """
         state_dict = {}
 
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             state_dict |= module.state_dict()
 
         return state_dict
+
+    def modules(self) -> list[nn.Module]:
+        """
+        Returns a list of all modules
+        """
+        modules = []
+        for module in self.lora_modules.values():
+            modules += module.modules()
+
+        return modules
 
     def hook_to_module(self):
         """
         Hooks the LoRA into the module without changing its weights
         """
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.hook_to_module()
 
     def remove_hook_from_module(self):
         """
         Removes the LoRA hook from the module without changing its weights
         """
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.remove_hook_from_module()
 
     def apply_to_module(self):
         """
         Applys the LoRA to the module, changing its weights
         """
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.apply_to_module()
 
     def extract_from_module(self, base_module: nn.Module):
         """
         Creates a LoRA from the difference between the base_module and the orig_module
         """
-        for name, module in self.modules.items():
+        for name, module in self.lora_modules.items():
             module.extract_from_module(base_module)
 
     def prune(self):
         """
         Removes all dummy modules
         """
-        self.modules = {k: v for (k, v) in self.modules.items() if not isinstance(v, DummyLoRAModule)}
+        self.lora_modules = {k: v for (k, v) in self.lora_modules.items() if not isinstance(v, DummyLoRAModule)}
 
     def set_dropout(self, dropout_probability: float):
         """
@@ -429,5 +445,5 @@ class LoRAModuleWrapper:
         """
         if dropout_probability < 0 or dropout_probability > 1:
             raise ValueError("Dropout probability must be in [0, 1]")
-        for module in self.modules.values():
+        for module in self.lora_modules.values():
             module.dropout.p = dropout_probability
