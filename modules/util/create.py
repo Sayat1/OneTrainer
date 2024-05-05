@@ -548,6 +548,42 @@ def create_optimizer(
                 **optimizer_config.extra
             )
 
+        # Schedule-free AdamW
+        case Optimizer.SCHEDULE_FREE_ADAMW:
+            if (config.model_type.is_wuerstchen_v2() or
+                config.model_type.is_stable_cascade()):
+                raise NotImplementedError("Cannot use schedule-free optimizers with Wuerstchen-based models.")
+            from schedulefree import AdamWScheduleFree
+            optimizer = AdamWScheduleFree(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                warmup_steps=config.learning_rate_warmup_steps,
+                r=optimizer_config.r if optimizer_config.r is not None else 0,
+                weight_lr_power=optimizer_config.weight_lr_power if optimizer_config.weight_lr_power is not None else 2.0,
+                foreach=optimizer_config.foreach if optimizer_config.foreach is not None else False
+            )
+
+        # Schedule-free SGD
+        case Optimizer.SCHEDULE_FREE_SGD:
+            if (config.model_type.is_wuerstchen_v2() or
+                config.model_type.is_stable_cascade()):
+                raise NotImplementedError("Cannot use schedule-free optimizers with Wuerstchen models.")
+            from schedulefree import SGDScheduleFree
+            optimizer = SGDScheduleFree(
+                params=parameters,
+                lr=config.learning_rate,
+                momentum=optimizer_config.momentum if optimizer_config.momentum is not None else 0,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
+                warmup_steps=config.learning_rate_warmup_steps,
+                r=optimizer_config.r if optimizer_config.r is not None else 0,
+                weight_lr_power=optimizer_config.weight_lr_power if optimizer_config.weight_lr_power is not None else 2.0,
+                foreach=optimizer_config.foreach if optimizer_config.foreach is not None else False
+            )
+
         # DADAPT_SGD Optimizer
         case Optimizer.DADAPT_SGD:
             import dadaptation as da
@@ -731,6 +767,7 @@ def create_ema(
 
 
 def create_lr_scheduler(
+        config: TrainConfig,
         optimizer: torch.optim.Optimizer,
         learning_rate_scheduler: LearningRateScheduler,
         warmup_steps: int,
@@ -748,6 +785,10 @@ def create_lr_scheduler(
     scheduler_steps = total_steps - warmup_steps
 
     assert eta_min < 1,"eta_min is must smaller than 1.0" 
+    # Force schedule-free algorithms to constant schedule.
+    if config.optimizer.optimizer.is_schedule_free:
+        learning_rate_scheduler = LearningRateScheduler.CONSTANT
+
     match learning_rate_scheduler:
         case LearningRateScheduler.CONSTANT:
             lr_lambda = lr_lambda_constant()
@@ -792,7 +833,7 @@ def create_lr_scheduler(
         case _:
             lr_lambda = lr_lambda_constant()
 
-    if warmup_steps > 0:
+    if warmup_steps > 0 and not config.optimizer.optimizer.is_schedule_free:
         lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
 
     return LambdaLR(
