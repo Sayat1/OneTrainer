@@ -277,7 +277,7 @@ def create_optimizer(
 ) -> torch.optim.Optimizer:
     optimizer = None
     optimizer_config = config.optimizer
-
+    print(f"using optimizer {config.optimizer.optimizer}")
     match config.optimizer.optimizer:
 
         # SGD Optimizer
