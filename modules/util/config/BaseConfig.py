@@ -139,7 +139,7 @@ class BaseConfig:
                         setattr(self, name, float(data[name]))
             except Exception:
                 if name in data:
-                    print(f"Could not set {name} as {str(data[name])}")
+                    raise ValueError(f"Could not set {name} as {str(data[name])}")
                 else:
                     # print(f"Could not set {name}, not found.")
                     pass
