@@ -559,7 +559,7 @@ def create_optimizer(
                 lr=config.learning_rate,
                 betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
                        optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999),
-                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
                 warmup_steps=config.learning_rate_warmup_steps,
                 r=optimizer_config.r if optimizer_config.r is not None else 0,
@@ -576,10 +576,10 @@ def create_optimizer(
             optimizer = SGDScheduleFree(
                 params=parameters,
                 lr=config.learning_rate,
-                momentum=optimizer_config.momentum if optimizer_config.momentum is not None else 0,
+                momentum=optimizer_config.momentum if optimizer_config.momentum is not None else 0.9,
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0,
                 warmup_steps=config.learning_rate_warmup_steps,
-                r=optimizer_config.r if optimizer_config.r is not None else 0,
+                r=optimizer_config.r if optimizer_config.r is not None else 0.0,
                 weight_lr_power=optimizer_config.weight_lr_power if optimizer_config.weight_lr_power is not None else 2.0,
                 foreach=optimizer_config.foreach if optimizer_config.foreach is not None else False
             )
