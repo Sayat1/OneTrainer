@@ -778,6 +778,7 @@ def create_lr_scheduler(
         gradient_accumulation_steps: int,
         global_step: int = 0,
         eta_min: float = 0.0,
+        power: float =1.0
 ) -> LRScheduler:
     steps_per_epoch = approximate_epoch_length / batch_size
     total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
@@ -822,7 +823,7 @@ def create_lr_scheduler(
             lr_lambda = lr_lambda_polynomial(
                 scheduler_steps,
                 eta_min,
-                1
+                power
             )
         case LearningRateScheduler.ADAFACTOR:
             from transformers.optimization import AdafactorSchedule

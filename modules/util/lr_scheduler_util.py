@@ -99,6 +99,6 @@ def lr_lambda_polynomial(
             decay_steps = scheduler_steps
             pct_remaining = 1 - current_step / decay_steps
             decay = lr_range * pct_remaining**power + eta_min
-            return decay / 1  # as LambdaLR multiplies by lr_init
+            return max(eta_min,decay)  # as LambdaLR multiplies by lr_init
 
     return lr_lambda
