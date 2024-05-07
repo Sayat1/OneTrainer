@@ -553,7 +553,8 @@ class GenericTrainer(BaseTrainer):
                     batch_size=self.config.batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
                     global_step=train_progress.global_step,
-                    eta_min = self.config.learning_rate_eta_min
+                    eta_min = self.config.learning_rate_eta_min,
+                    power=self.config.learning_rate_power
                 )
 
             current_epoch_length = len(self.data_loader.get_data_loader()) + train_progress.epoch_step
