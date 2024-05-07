@@ -1,14 +1,12 @@
-from typing import Iterable
-
 import torch
-from torch.nn import Parameter
 
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSetup.BaseStableDiffusionSetup import BaseStableDiffusionSetup
 from modules.module.LoRAModule import LoRAModuleWrapper
-from modules.util import create
+from modules.util.NamedParameterGroup import NamedParameterGroupCollection, NamedParameterGroup
 from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.optimizer_util import init_model_parameters
 
 
 class StableDiffusionLoRASetup(
@@ -30,73 +28,74 @@ class StableDiffusionLoRASetup(
             self,
             model: StableDiffusionModel,
             config: TrainConfig,
-    ) -> Iterable[Parameter]:
-        params = list()
-
-        if config.text_encoder.train:
-            params += list(model.text_encoder_lora.parameters())
-
-        if config.train_any_embedding():
-            params += list(model.embedding_wrapper.parameters())
-
-        if config.unet.train:
-            params += list(model.unet_lora.parameters())
-
-        return params
-
-    def create_parameters_for_optimizer(
-            self,
-            model: StableDiffusionModel,
-            config: TrainConfig,
-    ) -> Iterable[Parameter] | list[dict]:
-        param_groups = list()
+    ) -> NamedParameterGroupCollection:
+        parameter_group_collection = NamedParameterGroupCollection()
 
         if config.text_encoder.train:
             if config.lora_te_separate_train:
                 ex_layer_name=""
                 params=[]
+                te_index= 0
                 for key,module in model.text_encoder_lora.modules.items():
                     layer_name = ".".join(key.split(".")[:4])
                     if ex_layer_name != layer_name:
                         if len(params) > 0:
-                            param_groups.append(
-                                self.create_param_groups(config, params, config.text_encoder.learning_rate)
-                            )
+                            parameter_group_collection.add_group(NamedParameterGroup(
+                                unique_name=f"text_encoder_lora{te_index}",
+                                display_name=f"text_encoder_lora{te_index}",
+                                parameters=params,
+                                learning_rate=config.text_encoder.learning_rate,
+                            ))
                         params=[]
+                        te_index += 1
                         ex_layer_name = layer_name
                     params.extend(module.parameters())
-                param_groups.append(
-                    self.create_param_groups(config, params, config.text_encoder.learning_rate)
-                )
+                parameter_group_collection.add_group(NamedParameterGroup(
+                    unique_name=f"text_encoder_lora{te_index}",
+                    display_name=f"text_encoder_lora{te_index}",
+                    parameters=params,
+                    learning_rate=config.text_encoder.learning_rate,
+                ))
             else:
-                param_groups.append(
-                    self.create_param_groups(config, model.text_encoder_lora.parameters(), config.text_encoder.learning_rate)
-                )
-            
+                parameter_group_collection.add_group(NamedParameterGroup(
+                    unique_name="text_encoder_lora",
+                    display_name="text_encoder_lora",
+                    parameters=model.text_encoder_lora.parameters(),
+                    learning_rate=config.text_encoder.learning_rate,
+                ))
+
         if config.train_any_embedding():
-            param_groups.append(
-                self.create_param_groups(
-                    config,
-                    model.embedding_wrapper.parameters(),
-                    config.embedding_learning_rate,
-                )
-            )
+            for parameter, placeholder, name in zip(model.embedding_wrapper.additional_embeddings,
+                                                    model.embedding_wrapper.additional_embedding_placeholders,
+                                                    model.embedding_wrapper.additional_embedding_names):
+                parameter_group_collection.add_group(NamedParameterGroup(
+                    unique_name=f"embeddings/{name}",
+                    display_name=f"embeddings/{placeholder}",
+                    parameters=[parameter],
+                    learning_rate=config.embedding_learning_rate,
+                ))
 
         if config.unet.train:
             if config.lora_unet_separate_train:
-                for key,modules in model.unet_lora.block_parameters().items():
+                for i,key,modules in enumerate(model.unet_lora.block_parameters().items()):
                     params=[]
                     for module in modules:
                         params.extend(module.parameters())
-                    param_groups.append(
-                        self.create_param_groups(config, params, config.unet.learning_rate)
-                    )
+                    parameter_group_collection.add_group(NamedParameterGroup(
+                    unique_name=f"unet_lora{i}",
+                    display_name=f"unet_lora{i}",
+                    parameters=params,
+                    learning_rate=config.unet.learning_rate,
+                    ))
             else:
-                param_groups.append(
-                self.create_param_groups(config, model.unet_lora.parameters(), config.unet.learning_rate)
-                )
+                parameter_group_collection.add_group(NamedParameterGroup(
+                    unique_name="unet_lora",
+                    display_name="unet_lora",
+                    parameters=model.unet_lora.parameters(),
+                    learning_rate=config.unet.learning_rate,
+                ))
 
-        return param_groups
+        return parameter_group_collection
 
     def __setup_requires_grad(
             self,
@@ -167,15 +166,7 @@ class StableDiffusionLoRASetup(
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        model.optimizer = create.create_optimizer(
-            self.create_parameters_for_optimizer(model, config), model.optimizer_state_dict, config
-        )
-        model.optimizer_state_dict = None
-
-        model.ema = create.create_ema(
-            self.create_parameters(model, config), model.ema_state_dict, config
-        )
-        model.ema_state_dict = None
+        init_model_parameters(model, self.create_parameters(model, config))
 
         self._setup_optimizations(model, config)
 
@@ -217,18 +208,3 @@ class StableDiffusionLoRASetup(
         if config.preserve_embedding_norm:
             model.embedding_wrapper.normalize_embeddings()
         self.__setup_requires_grad(model, config)
-
-    def report_learning_rates(
-            self,
-            model,
-            config,
-            scheduler,
-            tensorboard
-    ):
-        lrs = scheduler.get_last_lr()
-        lrs = config.optimizer.optimizer.maybe_adjust_lrs(lrs, model.optimizer)
-
-        for i, lr in enumerate(lrs):
-            tensorboard.add_scalar(
-                f"lr/{i}", lr, model.train_progress.global_step
-            )
