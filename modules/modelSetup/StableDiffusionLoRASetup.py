@@ -36,7 +36,7 @@ class StableDiffusionLoRASetup(
                 ex_layer_name=""
                 params=[]
                 te_index= 0
-                for key,module in model.text_encoder_lora.modules.items():
+                for key,module in model.text_encoder_lora.lora_modules.items():
                     layer_name = ".".join(key.split(".")[:4])
                     if ex_layer_name != layer_name:
                         if len(params) > 0:
