@@ -77,9 +77,11 @@ class StableDiffusionLoRASetup(
 
         if config.unet.train:
             if config.lora_unet_separate_train:
-                for i,key,modules in enumerate(model.unet_lora.block_parameters().items()):
+                for i,module_pair in enumerate(model.unet_lora.block_parameters().items()):
                     params=[]
-                    for module in modules:
+                    key = module_pair[0]
+                    moudles = module_pair[1]
+                    for module in moudles:
                         params.extend(module.parameters())
                     parameter_group_collection.add_group(NamedParameterGroup(
                     unique_name=f"unet_lora{i}",
