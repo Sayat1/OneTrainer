@@ -531,14 +531,20 @@ class GenericTrainer(BaseTrainer):
             print("")
             self.callbacks.on_update_status("starting epoch/caching")
 
-            self.data_loader.get_data_set().start_next_epoch()
-            self.model_setup.setup_train_device(self.model, self.config)
+            if self.config.latent_caching:
+                self.data_loader.get_data_set().start_next_epoch()
+                self.model_setup.setup_train_device(self.model, self.config)
+            else:
+                self.model_setup.setup_train_device(self.model, self.config)
+                self.data_loader.get_data_set().start_next_epoch()
+
             # Special case for schedule-free optimizers, which need train()
             # called before training. Can and should move this to a callback
             # during a refactoring.
             if self.config.optimizer.optimizer.is_schedule_free:
                 torch.clear_autocast_cache()
                 self.model.optimizer.train()
+
             torch_gc()
 
             if lr_scheduler is None:
@@ -557,8 +563,9 @@ class GenericTrainer(BaseTrainer):
                     power=self.config.learning_rate_power
                 )
 
-            current_epoch_length = len(self.data_loader.get_data_loader()) + train_progress.epoch_step
-            step_tqdm = tqdm(self.data_loader.get_data_loader(),position=0, file=sys.stdout, desc="step")
+            current_epoch_length = self.data_loader.get_data_set().approximate_length()
+            step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step",position=0, file=sys.stdout, total=current_epoch_length,
+                             initial=train_progress.epoch_step)
             for epoch_step, batch in enumerate(step_tqdm):
                 if self.__needs_sample(train_progress) or self.commands.get_and_reset_sample_default_command():
                     self.__enqueue_sample_during_training(
