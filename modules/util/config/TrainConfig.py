@@ -328,6 +328,7 @@ class TrainConfig(BaseConfig):
     lora_te_separate_train:bool
     lora_unet_separate_train:bool
     lora_dora_wd:bool
+    bundle_additional_embeddings: bool
 
     # optimizer
     optimizer: TrainOptimizerConfig
@@ -728,6 +729,7 @@ class TrainConfig(BaseConfig):
         data.append(("lora_te_separate_train", False, bool, False))
         data.append(("lora_unet_separate_train", False, bool, False))
         data.append(("lora_dora_wd", False, bool, False))
+        data.append(("bundle_additional_embeddings", True, bool, False))
 
         # optimizer
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
