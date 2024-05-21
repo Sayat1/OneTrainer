@@ -10,6 +10,7 @@ class LearningRateScheduler(Enum):
     REX = 'REX'
     POLYNOMIAL = 'POLYNOMIAL'
     ADAFACTOR = 'ADAFACTOR'
+    CUSTOM = 'CUSTOM'
 
     def __str__(self):
         return self.value
