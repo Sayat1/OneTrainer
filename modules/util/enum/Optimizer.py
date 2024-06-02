@@ -76,6 +76,8 @@ class Optimizer(Enum):
         return self in [
             Optimizer.ADAFACTOR,
             Optimizer.CAME,
+            Optimizer.ADAM,
+            Optimizer.ADAMW,
         ]
 
     # Small helper for adjusting learning rates to adaptive optimizers.

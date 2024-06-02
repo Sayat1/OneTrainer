@@ -11,6 +11,7 @@ import torch
 from PIL.Image import Image
 from torch import Tensor, nn
 from torch.nn import Parameter
+from torch.utils.hooks import RemovableHandle
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms.functional import pil_to_tensor
 from tqdm import tqdm
@@ -53,6 +54,8 @@ class GenericTrainer(BaseTrainer):
     tensorboard_subprocess: subprocess.Popen
     tensorboard: SummaryWriter
 
+    grad_hook_handles: list[RemovableHandle]
+
     def __init__(self, config: TrainConfig, callbacks: TrainCallbacks, commands: TrainCommands):
         super(GenericTrainer, self).__init__(config, callbacks, commands)
 
@@ -87,6 +90,8 @@ class GenericTrainer(BaseTrainer):
             self.tensorboard_subprocess = subprocess.Popen(tensorboard_args)
 
         self.one_step_trained = False
+
+        self.grad_hook_handles = []
 
     def start(self):
         if self.config.clear_cache_before_training and self.config.latent_caching:
@@ -450,7 +455,9 @@ class GenericTrainer(BaseTrainer):
         torch_gc()
 
     def __needs_sample(self, train_progress: TrainProgress):
-        return self.repeating_action_needed("sample", self.config.sample_after, self.config.sample_after_unit, train_progress)
+        return self.repeating_action_needed(
+            "sample", self.config.sample_after, self.config.sample_after_unit, train_progress
+        )
 
     def __needs_backup(self, train_progress: TrainProgress):
         return self.repeating_action_needed(
@@ -482,8 +489,8 @@ class GenericTrainer(BaseTrainer):
                     if parameter.requires_grad:
                         if scaler:
                             def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
-                                nn.utils.clip_grad_norm_(tensor, 1)
                                 scaler.unscale_parameter_(tensor, self.model.optimizer)
+                                nn.utils.clip_grad_norm_(tensor, 1)
                                 scaler.maybe_opt_step_parameter(tensor, param_group, i, self.model.optimizer)
                                 tensor.grad = None
                         else:
@@ -492,7 +499,8 @@ class GenericTrainer(BaseTrainer):
                                 self.model.optimizer.step_parameter(tensor, param_group, i)
                                 tensor.grad = None
 
-                        parameter.register_post_accumulate_grad_hook(__grad_hook)
+                        handle = parameter.register_post_accumulate_grad_hook(__grad_hook)
+                        self.grad_hook_handles.append(handle)
 
     def __before_eval(self):
         # Special case for schedule-free optimizers, which need eval()
@@ -591,7 +599,7 @@ class GenericTrainer(BaseTrainer):
                 if (self.__needs_backup(self.model.train_progress) and self.one_step_trained) or self.commands.get_and_reset_backup_command():
                     self.backup(self.model.train_progress)
 
-                if self.__needs_save(train_progress) and self.one_step_trained:
+                if self.__needs_save(train_progress) or self.commands.get_and_reset_save_command():
                     self.save(train_progress)
 
                 self.callbacks.on_update_status("training")
@@ -707,5 +715,8 @@ class GenericTrainer(BaseTrainer):
 
         self.tensorboard.close()
 
-        # if self.config.tensorboard:
-        #     self.tensorboard_subprocess.kill()
+        if self.config.tensorboard:
+            self.tensorboard_subprocess.kill()
+
+        for handle in self.grad_hook_handles:
+            handle.remove()
