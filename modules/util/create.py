@@ -810,7 +810,9 @@ def create_ema(
         update_step_interval=config.ema_update_step_interval,
         device=device,
         batch_size=config.batch_size,
-        gradient_accumulation=config.gradient_accumulation_steps
+        gradient_accumulation=config.gradient_accumulation_steps,
+        ema_power=config.ema_power,
+        ema_reach_step=config.ema_reach_step
     )
 
     if state_dict is not None:

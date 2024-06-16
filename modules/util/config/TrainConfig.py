@@ -237,6 +237,8 @@ class TrainConfig(BaseConfig):
     ema: EMAMode
     ema_decay: float
     ema_update_step_interval: int
+    ema_power: int
+    ema_reach_step: int
     dataloader_threads: int
     train_device: str
     temp_device: str
@@ -602,6 +604,8 @@ class TrainConfig(BaseConfig):
         data.append(("ema", EMAMode.OFF, EMAMode, False))
         data.append(("ema_decay", 0.999, float, False))
         data.append(("ema_update_step_interval", 5, int, False))
+        data.append(("ema_power", 10, int, False))
+        data.append(("ema_reach_step", 1000, int, False))
         data.append(("dataloader_threads", 2, int, False))
         data.append(("train_device", default_device.type, str, False))
         data.append(("temp_device", "cpu", str, False))
