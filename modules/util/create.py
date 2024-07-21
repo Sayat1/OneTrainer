@@ -825,7 +825,7 @@ def create_optimizer(
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
         optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
-
+    print(f"using {type(optimizer).__name__} optimizer")
     print(f"final optimizer args | {arguments}")
     del arguments
     return optimizer
