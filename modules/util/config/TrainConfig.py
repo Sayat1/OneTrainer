@@ -345,6 +345,7 @@ class TrainConfig(BaseConfig):
     # optimizer
     optimizer: TrainOptimizerConfig
     optimizer_defaults: dict[str, TrainOptimizerConfig]
+    use_mechanic:bool
 
     # sample settings
     sample_definition_file_name: str
@@ -762,6 +763,7 @@ class TrainConfig(BaseConfig):
         # optimizer
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
         data.append(("optimizer_defaults", {}, dict[str, TrainOptimizerConfig], False))
+        data.append(("use_mechanic", False, bool, False))
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
