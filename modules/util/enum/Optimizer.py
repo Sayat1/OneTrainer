@@ -82,8 +82,8 @@ class Optimizer(Enum):
 
     # Small helper for adjusting learning rates to adaptive optimizers.
     def maybe_adjust_lrs(self, lrs: dict[str, float], optimizer: torch.optim.Optimizer):
+        dlrs= lrs.copy()
         if self.is_adaptive:
-            dlrs= {}
             for i,item in enumerate(lrs.items()):
                 if "dlr" in optimizer.param_groups[i]:
                     dlrs.update({item[0]:optimizer.param_groups[i]["dlr"]})
@@ -91,15 +91,13 @@ class Optimizer(Enum):
                     dlrs.update({item[0]:float(item[1])*optimizer.param_groups[i]["d"]})
             return dlrs
         elif self.is_schedule_free:
-            dlrs= {}
             for i,item in enumerate(lrs.items()):
                 if "lr_max" in optimizer.param_groups[i]:
                     dlrs.update({f"lr_max[{i}]":optimizer.param_groups[i]["lr_max"]})
                 else:
                     dlrs.update({item[0]:float(item[1])})
             return dlrs
-        elif "mecha" in type(optimizer).__name__.lower():
-            dlrs= lrs.copy()
+        if "mecha" in type(optimizer).__name__.lower():
             s = optimizer.state['_mechanic']['s']
             s_sum = torch.sum(s).item()
             for i,item in enumerate(lrs.items()):
