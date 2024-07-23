@@ -39,6 +39,7 @@ class TrainOptimizerConfig(BaseConfig):
     capturable: bool
     centered: bool
     clip_threshold: float
+    layer_scale: float
     d0: float
     d_coef: float
     dampening: float
@@ -96,6 +97,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("capturable", False, bool, False))
         data.append(("centered", False, bool, False))
         data.append(("clip_threshold", None, float, True))
+        data.append(("layer_scale", None, float, True))
         data.append(("d0", None, float, True))
         data.append(("d_coef", None, float, True))
         data.append(("dampening", None, float, True))

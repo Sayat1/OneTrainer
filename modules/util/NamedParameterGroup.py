@@ -52,11 +52,14 @@ class NamedParameterGroupCollection:
             lr = lr * ((batch_size_scale * gradient_accumulation_steps_scale) ** 0.5)
 
             # Create a parameter group for the text encoder
-            parameters.append({
+            temp_param = {
                 'params': list(group.parameters),
                 'lr': lr,
                 'initial_lr': lr,
-            })
+            }
+            if config.optimizer.layer_scale:
+                temp_param.update({"layer_scale":config.optimizer.layer_scale})
+            parameters.append(temp_param)
 
         return parameters
 
