@@ -86,14 +86,14 @@ class Optimizer(Enum):
         if self.is_adaptive:
             for i,item in enumerate(lrs.items()):
                 if "dlr" in optimizer.param_groups[i]:
-                    dlrs.update({item[0]:optimizer.param_groups[i]["dlr"]})
+                    dlrs.update({f"lr/dlr[{i}]":optimizer.param_groups[i]["dlr"]})
                 else:
-                    dlrs.update({item[0]:float(item[1])*optimizer.param_groups[i]["d"]})
+                    dlrs.update({f"lr/dlr[{i}]":float(item[1])*optimizer.param_groups[i]["d"]})
             return dlrs
         elif self.is_schedule_free:
             for i,item in enumerate(lrs.items()):
                 if "lr_max" in optimizer.param_groups[i]:
-                    dlrs.update({f"lr_max[{i}]":optimizer.param_groups[i]["lr_max"]})
+                    dlrs.update({f"lr/lr_max[{i}]":optimizer.param_groups[i]["lr_max"]})
                 else:
                     dlrs.update({item[0]:float(item[1])})
             return dlrs
