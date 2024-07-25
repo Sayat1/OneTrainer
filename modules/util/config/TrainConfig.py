@@ -279,6 +279,7 @@ class TrainConfig(BaseConfig):
     force_epsilon_prediction: bool
     min_noising_strength: float
     max_noising_strength: float
+    max_grad_norm: float
     noising_weight: float
     noising_bias: float
 
@@ -655,6 +656,7 @@ class TrainConfig(BaseConfig):
         data.append(("force_epsilon_prediction", False, bool, False))
         data.append(("min_noising_strength", 0.0, float, False))
         data.append(("max_noising_strength", 1.0, float, False))
+        data.append(("max_grad_norm", 1.0, float, False))
         data.append(("noising_weight", 0.0, float, False))
         data.append(("noising_bias", 0.5, float, False))
 
