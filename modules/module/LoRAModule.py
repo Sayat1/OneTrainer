@@ -209,6 +209,10 @@ class LoRAModuleWrapper:
                     elif isinstance(child_module, Conv2d):
                         print("True")
                         lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)
+                    else:
+                        print("False")
+                else:
+                    print("False")
 
         return lora_modules
 
