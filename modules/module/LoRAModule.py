@@ -198,7 +198,7 @@ class LoRAModuleWrapper:
         if orig_module is not None:
             for name, child_module in orig_module.named_modules():
                 if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
-                    print(f"{child_module} | TRAIN:",end="")
+                    print(f"{name} | TRAIN:",end="")
                 if (len(self.module_block) == 0 and len(self.module_filter) == 0) or \
                     (len(self.module_block) == 0 and any([x in name for x in self.module_filter])) or \
                     (any([x in name for x in self.module_block]) and len(self.module_filter) == 0) or \
