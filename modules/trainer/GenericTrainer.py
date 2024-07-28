@@ -59,6 +59,16 @@ class GenericTrainer(BaseTrainer):
     def __init__(self, config: TrainConfig, callbacks: TrainCallbacks, commands: TrainCommands):
         super(GenericTrainer, self).__init__(config, callbacks, commands)
 
+        import random
+        import numpy as np
+        if config.seed is None or config.seed == -1:
+            config.seed = random.randint(0, 2**32)
+        print(f"set seed:{config.seed}")
+        random.seed(config.seed)
+        np.random.seed(config.seed)
+        torch.manual_seed(config.seed)
+        torch.cuda.manual_seed_all(config.seed)
+
         tensorboard_log_dir = os.path.join(config.workspace_dir, "tensorboard")
         os.makedirs(Path(tensorboard_log_dir).absolute(), exist_ok=True)
         self.tensorboard = SummaryWriter(os.path.join(tensorboard_log_dir, get_string_timestamp()))
@@ -170,22 +180,42 @@ class GenericTrainer(BaseTrainer):
         return None
 
     def __prune_backups(self, backups_to_keep: int):
-        backup_dirpath = os.path.join(self.config.workspace_dir, "backup")
+        backup_dirpath = os.path.abspath(os.path.join(self.config.workspace_dir, "backup"))
+        print("__prune_backups")
         if os.path.exists(backup_dirpath):
             backup_directories = sorted(
                 [dirpath for dirpath in os.listdir(backup_dirpath) if
                  os.path.isdir(os.path.join(backup_dirpath, dirpath))],
                 reverse=True,
             )
-
-            for dirpath in backup_directories[backups_to_keep:]:
-                dirpath = os.path.join(backup_dirpath, dirpath)
-                try:
-                    shutil.rmtree(dirpath)
-                except Exception as e:
-                    print(f"Could not delete old rolling backup {dirpath}")
+            try:
+                for dirpath in backup_directories[backups_to_keep:]:
+                    dirpath = os.path.join(backup_dirpath, dirpath)
+                    print(f"Deleting old backup {str(dirpath)}")
+                    path_dir = Path(dirpath)
+                    newpath_dir = path_dir.rename(f"/content/drive/MyDrive/{path_dir.name}/")
+            except Exception as e:
+                print(f"Could not delete old rolling backup {dirpath}")
 
         return None
+
+    def __prune_saves(self,saves_to_keep: int,save_path: str,save_base_name: str,save_file_ext: str):
+        save_dirpath = Path(save_path).parent
+        if save_dirpath.exists():
+            save_files_path = sorted(save_dirpath.glob(f"{save_base_name}*{save_file_ext}"),key=os.path.getmtime,reverse=True)
+            for save_file_path in save_files_path[saves_to_keep:]:
+                try:
+                    print(f"Deleting old save {str(save_file_path)}")
+                    with open(str(save_file_path),'w') as f:
+                        pass
+                    os.remove(str(save_file_path))
+                    yaml_file = save_dirpath/f"{save_file_path.stem}.yaml"
+                    if yaml_file.exists():
+                        with open(str(yaml_file),'w') as f:
+                            pass
+                        os.remove(str(yaml_file))
+                except Exception as e:
+                    print(f"Could not delete old rolling save {save_file_path}")
 
     def __enqueue_sample_during_training(self, fun: Callable):
         self.sample_queue.append(fun)
@@ -337,7 +367,7 @@ class GenericTrainer(BaseTrainer):
         self.callbacks.on_update_status("creating backup")
 
         backup_name = f"{get_string_timestamp()}-backup-{train_progress.filename_string()}"
-        backup_path = os.path.join(self.config.workspace_dir, "backup", backup_name)
+        backup_path = os.path.abspath(os.path.join(self.config.workspace_dir, "backup", backup_name))
 
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
@@ -382,12 +412,8 @@ class GenericTrainer(BaseTrainer):
         torch_gc()
 
         self.callbacks.on_update_status("saving")
-
-        save_path = os.path.join(
-            self.config.workspace_dir,
-            "save",
-            f"{self.config.save_filename_prefix}{get_string_timestamp()}-save-{train_progress.filename_string()}{self.config.output_model_format.file_extension()}"
-        )
+        output_model_destination_path = Path(self.config.output_model_destination )
+        save_path = str(output_model_destination_path.parent / f"{self.config.save_filename_prefix}{output_model_destination_path.stem}-{train_progress.filename_string()}{self.config.output_model_format.file_extension()}")
         print("Saving " + save_path)
 
         try:
@@ -421,6 +447,8 @@ class GenericTrainer(BaseTrainer):
         finally:
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)
+            if self.config.rolling_save_count > 0:
+                self.__prune_saves(self.config.rolling_save_count,save_path,output_model_destination_path.stem,self.config.output_model_format.file_extension())
 
         torch_gc()
 
@@ -460,12 +488,12 @@ class GenericTrainer(BaseTrainer):
                         if scaler:
                             def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
                                 scaler.unscale_parameter_(tensor, self.model.optimizer)
-                                nn.utils.clip_grad_norm_(tensor, 1)
+                                nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
                                 scaler.maybe_opt_step_parameter(tensor, param_group, i, self.model.optimizer)
                                 tensor.grad = None
                         else:
                             def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
-                                nn.utils.clip_grad_norm_(tensor, 1)
+                                nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
                                 self.model.optimizer.step_parameter(tensor, param_group, i)
                                 tensor.grad = None
 
@@ -487,7 +515,7 @@ class GenericTrainer(BaseTrainer):
 
         if self.config.only_cache:
             self.callbacks.on_update_status("caching")
-            for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1), desc="epoch"):
+            for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch"):
                 self.data_loader.get_data_set().start_next_epoch()
             return
 
@@ -505,7 +533,8 @@ class GenericTrainer(BaseTrainer):
         lr_scheduler = None
         accumulated_loss = 0.0
         ema_loss = None
-        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1), desc="epoch"):
+        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch"):
+            print("")
             self.callbacks.on_update_status("starting epoch/caching")
 
             if self.config.latent_caching:
@@ -539,7 +568,7 @@ class GenericTrainer(BaseTrainer):
                 )
 
             current_epoch_length = self.data_loader.get_data_set().approximate_length()
-            step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step", total=current_epoch_length,
+            step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step",position=0, file=sys.stdout, total=current_epoch_length,
                              initial=train_progress.epoch_step)
             for epoch_step, batch in enumerate(step_tqdm):
                 if self.__needs_sample(train_progress) or self.commands.get_and_reset_sample_default_command():
@@ -590,11 +619,11 @@ class GenericTrainer(BaseTrainer):
                         scaler.update()
                     elif scaler:
                         scaler.unscale_(self.model.optimizer)
-                        nn.utils.clip_grad_norm_(self.parameters, 1)
+                        nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
                         scaler.step(self.model.optimizer)
                         scaler.update()
                     else:
-                        nn.utils.clip_grad_norm_(self.parameters, 1)
+                        nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
                         self.model.optimizer.step()
 
                     lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
@@ -654,7 +683,7 @@ class GenericTrainer(BaseTrainer):
             self.callbacks.on_update_status("saving the final model")
 
             if self.model.ema:
-                self.model.ema.copy_ema_to(self.parameters, store_temp=False)
+                self.model.ema.copy_ema_to(self.parameters, store_temp=True)
 
             print("Saving " + self.config.output_model_destination)
 
@@ -665,6 +694,20 @@ class GenericTrainer(BaseTrainer):
                 output_model_destination=self.config.output_model_destination,
                 dtype=self.config.output_dtype.torch_dtype()
             )
+
+            if self.model.ema:
+                self.model.ema.copy_temp_to(self.parameters)
+                dest_path = Path(self.config.output_model_destination)
+                non_ema_dest_path = str(dest_path.parent/f"{dest_path.stem}-non_ema{dest_path.suffix}")
+                print("Saving non-ema " + non_ema_dest_path)
+
+                self.model_saver.save(
+                    model=self.model,
+                    model_type=self.config.model_type,
+                    output_model_format=self.config.output_model_format,
+                    output_model_destination=non_ema_dest_path,
+                    dtype=self.config.output_dtype.torch_dtype()
+                )
 
         self.tensorboard.close()
 

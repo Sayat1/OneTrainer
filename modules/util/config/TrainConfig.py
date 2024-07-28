@@ -74,6 +74,7 @@ class TrainOptimizerConfig(BaseConfig):
     use_triton: bool
     warmup_init: bool
     weight_decay: float
+    extra:dict
     weight_lr_power: float
     decoupled_decay: bool
     fixed_decay: bool
@@ -142,6 +143,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("use_triton", False, bool, False))
         data.append(("warmup_init", False, bool, False))
         data.append(("weight_decay", None, float, True))
+        data.append(("extra", {}, dict, False))
         data.append(("weight_lr_power", None, float, True))
         data.append(("decoupled_decay", False, bool, False))
         data.append(("fixed_decay", False, bool, False))
@@ -287,6 +289,7 @@ class TrainConfig(BaseConfig):
     dropout_probability: float
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
+    seed: int
 
     # noise
     offset_noise_weight: float
@@ -297,7 +300,7 @@ class TrainConfig(BaseConfig):
     timestep_distribution: TimestepDistribution
     min_noising_strength: float
     max_noising_strength: float
-
+    max_grad_norm: float
     noising_weight: float
     noising_bias: float
 
@@ -357,6 +360,7 @@ class TrainConfig(BaseConfig):
     # optimizer
     optimizer: TrainOptimizerConfig
     optimizer_defaults: dict[str, TrainOptimizerConfig]
+    use_mechanic:bool
 
     # sample settings
     sample_definition_file_name: str
@@ -375,6 +379,7 @@ class TrainConfig(BaseConfig):
     backup_before_save: bool
     save_after: float
     save_after_unit: TimeUnit
+    rolling_save_count: int
     save_filename_prefix: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
@@ -679,6 +684,7 @@ class TrainConfig(BaseConfig):
         data.append(("dropout_probability", 0.0, float, False))
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
+        data.append(("seed", -1, int, False))
 
         # noise
         data.append(("offset_noise_weight", 0.0, float, False))
@@ -688,6 +694,7 @@ class TrainConfig(BaseConfig):
         data.append(("force_epsilon_prediction", False, bool, False))
         data.append(("min_noising_strength", 0.0, float, False))
         data.append(("max_noising_strength", 1.0, float, False))
+        data.append(("max_grad_norm", 1.0, float, False))
         data.append(("timestep_distribution", TimestepDistribution.UNIFORM, TimestepDistribution, False))
         data.append(("noising_weight", 0.0, float, False))
         data.append(("noising_bias", 0.0, float, False))
@@ -790,6 +797,7 @@ class TrainConfig(BaseConfig):
         # optimizer
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
         data.append(("optimizer_defaults", {}, dict[str, TrainOptimizerConfig], False))
+        data.append(("use_mechanic", False, bool, False))
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
@@ -808,6 +816,7 @@ class TrainConfig(BaseConfig):
         data.append(("backup_before_save", True, bool, False))
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
+        data.append(("rolling_save_count", 1, int, False))
         data.append(("save_filename_prefix", "", str, False))
 
         return TrainConfig(data)
