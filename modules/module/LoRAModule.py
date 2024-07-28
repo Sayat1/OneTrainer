@@ -114,8 +114,12 @@ class Conv2dLoRAModule(LoRAModule):
         in_channels = orig_module.in_channels
         out_channels = orig_module.out_channels
 
-        self.lora_down = Conv2d(in_channels, rank, (1, 1), bias=False, device=orig_module.weight.device)
-        self.lora_up = Conv2d(rank, out_channels, (1, 1), bias=False, device=orig_module.weight.device)
+        kernel_size = orig_module.kernel_size
+        stride = orig_module.stride
+        padding = orig_module.padding
+
+        self.lora_down = Conv2d(in_channels, rank, kernel_size, stride, padding, bias=False, device=orig_module.weight.device)
+        self.lora_up = Conv2d(rank, out_channels, (1, 1), (1, 1), bias=False, device=orig_module.weight.device)
 
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)
@@ -177,12 +181,14 @@ class LoRAModuleWrapper:
             prefix: str,
             alpha: float = 1.0,
             module_filter: list[str] = None,
+            module_block: list[str] = None,
     ):
         super(LoRAModuleWrapper, self).__init__()
         self.orig_module = orig_module
         self.rank = rank
         self.prefix = prefix
         self.module_filter = module_filter if module_filter is not None else []
+        self.module_block = module_block if module_block is not None else []
 
         self.lora_modules = self.__create_modules(orig_module, alpha)
 
@@ -191,10 +197,17 @@ class LoRAModuleWrapper:
 
         if orig_module is not None:
             for name, child_module in orig_module.named_modules():
-                if len(self.module_filter) == 0 or any([x in name for x in self.module_filter]):
+                if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
+                    print(f"{child_module} | TRAIN:",end="")
+                if (len(self.module_block) == 0 and len(self.module_filter) == 0) or \
+                    (len(self.module_block) == 0 and any([x in name for x in self.module_filter])) or \
+                    (any([x in name for x in self.module_block]) and len(self.module_filter) == 0) or \
+                    (any([x in name for x in self.module_block]) and any([x in name for x in self.module_filter])):
                     if isinstance(child_module, Linear):
+                        print("True")
                         lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)
                     elif isinstance(child_module, Conv2d):
+                        print("True")
                         lora_modules[name] = Conv2dLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)
 
         return lora_modules
