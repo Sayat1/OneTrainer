@@ -129,6 +129,7 @@ class GenericTrainer(BaseTrainer):
             model_type=self.config.model_type,
             model_names=model_names,
             weight_dtypes=self.config.weight_dtypes(),
+            train_config=self.config
         )
         self.model.train_config = self.config
 
