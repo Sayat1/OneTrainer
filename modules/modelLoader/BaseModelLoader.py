@@ -9,6 +9,8 @@ from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.TrainProgress import TrainProgress
 from modules.util.enum.ModelType import ModelType
+from modules.util.config.TrainConfig import TrainConfig
+
 
 
 class BaseModelLoader(metaclass=ABCMeta):
@@ -49,5 +51,6 @@ class BaseModelLoader(metaclass=ABCMeta):
             model_type: ModelType,
             model_names: ModelNames,
             weight_dtypes: ModelWeightDtypes,
+            train_config: TrainConfig
     ) -> BaseModel | None:
         pass

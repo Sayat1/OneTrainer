@@ -7,6 +7,7 @@ from modules.modelLoader.mixin.ModelSpecModelLoaderMixin import ModelSpecModelLo
 from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.enum.ModelType import ModelType
+from modules.util.config.TrainConfig import TrainConfig
 
 
 class StableDiffusionFineTuneModelLoader(
@@ -46,11 +47,12 @@ class StableDiffusionFineTuneModelLoader(
             model_type: ModelType,
             model_names: ModelNames,
             weight_dtypes: ModelWeightDtypes,
+            train_config: TrainConfig
     ) -> StableDiffusionModel | None:
         base_model_loader = StableDiffusionModelLoader()
         embedding_loader = StableDiffusionEmbeddingLoader()
 
-        model = StableDiffusionModel(model_type=model_type)
+        model = StableDiffusionModel(model_type=model_type,train_config=train_config)
 
         self._load_internal_data(model, model_names.base_model)
         model.model_spec = self._load_default_model_spec(model_type)
