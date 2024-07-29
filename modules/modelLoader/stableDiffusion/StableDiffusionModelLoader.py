@@ -72,7 +72,7 @@ class StableDiffusionModelLoader(
             subfolder="scheduler",
         )
         noise_scheduler = create.create_noise_scheduler(
-            noise_scheduler=NoiseScheduler.DDIM,
+            noise_scheduler=model.train_config.train_sampler,
             original_noise_scheduler=noise_scheduler,
         )
 
@@ -162,7 +162,7 @@ class StableDiffusionModelLoader(
         )
 
         noise_scheduler = create.create_noise_scheduler(
-            noise_scheduler=NoiseScheduler.DDIM,
+            noise_scheduler=model.train_config.train_sampler,
             original_noise_scheduler=pipeline.scheduler,
         )
 
@@ -209,7 +209,7 @@ class StableDiffusionModelLoader(
         )
 
         noise_scheduler = create.create_noise_scheduler(
-            noise_scheduler=NoiseScheduler.DDIM,
+            noise_scheduler=model.train_config.train_sampler,
             original_noise_scheduler=pipeline.scheduler,
         )
 

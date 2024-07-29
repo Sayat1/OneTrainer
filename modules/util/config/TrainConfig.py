@@ -22,6 +22,7 @@ from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TimeUnit import TimeUnit
+from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.TimestepDistribution import TimestepDistribution
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.torch_util import default_device
@@ -289,6 +290,7 @@ class TrainConfig(BaseConfig):
     dropout_probability: float
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
+    train_sampler: NoiseScheduler
     seed: int
 
     # noise
@@ -686,6 +688,7 @@ class TrainConfig(BaseConfig):
         data.append(("dropout_probability", 0.0, float, False))
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
+        data.append(("train_sampler", NoiseScheduler.DDIM, NoiseScheduler, False))
         data.append(("seed", -1, int, False))
 
         # noise
