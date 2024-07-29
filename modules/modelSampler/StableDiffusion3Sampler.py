@@ -1,6 +1,7 @@
 import copy
 import inspect
 import os
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -234,7 +235,7 @@ class StableDiffusion3Sampler(BaseModelSampler):
                 extra_step_kwargs["generator"] = generator
 
             self.model.transformer_to(self.train_device)
-            for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
+            for i, timestep in enumerate(tqdm(timesteps, position=0,file=sys.stdout, desc="sampling")):
                 latent_model_input = torch.cat([latent_image] * 2)
                 expanded_timestep = timestep.expand(latent_model_input.shape[0])
                 # Don't seem to scale the latents in SD3.

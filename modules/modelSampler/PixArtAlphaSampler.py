@@ -1,5 +1,6 @@
 import inspect
 import os
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -154,7 +155,7 @@ class PixArtAlphaSampler(BaseModelSampler):
 
             # denoising loop
             self.model.transformer_to(self.train_device)
-            for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
+            for i, timestep in enumerate(tqdm(timesteps, position=0,file=sys.stdout, desc="sampling")):
                 latent_model_input = torch.cat([latent_image] * 2)
                 latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
 
