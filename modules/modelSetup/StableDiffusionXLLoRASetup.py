@@ -130,25 +130,14 @@ class StableDiffusionXLLoRASetup(
         create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te1")
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
 
-        # model.text_encoder_1_lora = LoRAModuleWrapper(
-        #     model.text_encoder_1, config.lora_rank, "lora_te1", config.lora_alpha
-        # ) if create_te1 else None
-
         LycorisNetwork.LORA_PREFIX = "lora_te1"
-        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
+        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=config.lora_type, dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
 
-        # model.text_encoder_2_lora = LoRAModuleWrapper(
-        #     model.text_encoder_2, config.lora_rank, "lora_te2", config.lora_alpha
-        # ) if create_te2 else None
         LycorisNetwork.LORA_PREFIX = "lora_te2"
-        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
-
-        # model.unet_lora = LoRAModuleWrapper(
-        #     model.unet, config.lora_rank, "lora_unet", config.lora_alpha, module_filter=config.lora_module_name, module_exclude_block=config.lora_module_exclude_block
-        # )
+        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=config.lora_type, dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
 
         LycorisNetwork.LORA_PREFIX = "lora_unet"
-        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
+        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=config.lora_type, dropout=config.dropout_probability, **config.lycoris_options)
 
         if model.lora_state_dict:
             if create_te1:
@@ -158,12 +147,6 @@ class StableDiffusionXLLoRASetup(
 
             model.unet_lora.load_state_dict(model.lora_state_dict)
             model.lora_state_dict = None
-
-        # if config.text_encoder.train:
-        #     model.text_encoder_1_lora.set_dropout(config.dropout_probability)
-        # if config.text_encoder_2.train:
-        #     model.text_encoder_2_lora.set_dropout(config.dropout_probability)
-        # model.unet_lora.set_dropout(config.dropout_probability)
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
@@ -206,14 +189,8 @@ class StableDiffusionXLLoRASetup(
 
         if config.text_encoder.train:
             model.text_encoder_1.train()
-            if model.text_encoder_1_lora:
-                print("must true")
-                print(model.text_encoder_1_lora.training)
         else:
             model.text_encoder_1.eval()
-            if model.text_encoder_1_lora:
-                print("must false")
-                print(model.text_encoder_1_lora.training)
 
         if config.text_encoder_2.train:
             model.text_encoder_2.train()

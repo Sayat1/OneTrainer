@@ -25,6 +25,7 @@ from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.TimestepDistribution import TimestepDistribution
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.enum.LoraType import LoraType
 from modules.util.torch_util import default_device
 
 
@@ -357,8 +358,8 @@ class TrainConfig(BaseConfig):
     lora_rank: int
     lora_alpha: float
     lora_weight_dtype: DataType
-    lora_module_name: list[str]
-    lora_module_exclude_block: list[str]
+    lora_type: LoraType
+    lycoris_options: dict
     bundle_additional_embeddings: bool
 
     # optimizer
@@ -797,8 +798,8 @@ class TrainConfig(BaseConfig):
         data.append(("lora_rank", 16, int, False))
         data.append(("lora_alpha", 1.0, float, False))
         data.append(("lora_weight_dtype", DataType.FLOAT_32, DataType, False))
-        data.append(("lora_module_name", ["attentions"], list[str], False))
-        data.append(("lora_module_exclude_block", [], list[str], False))
+        data.append(("lora_type", LoraType.LORA, LoraType, False))
+        data.append(("lycoris_options", {}, dict, False))
         data.append(("bundle_additional_embeddings", True, bool, False))
 
         # optimizer
