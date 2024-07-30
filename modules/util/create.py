@@ -322,7 +322,7 @@ def create_optimizer(
     optimizer_config = config.optimizer
 
     parameters = parameter_group_collection.parameters_for_optimizer(config)
-
+    print(parameters)
     match config.optimizer.optimizer:
 
         # SGD Optimizer
