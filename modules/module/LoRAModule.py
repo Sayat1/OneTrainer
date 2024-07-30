@@ -181,14 +181,14 @@ class LoRAModuleWrapper:
             prefix: str,
             alpha: float = 1.0,
             module_filter: list[str] = None,
-            module_block: list[str] = None,
+            module_exclude_block: list[str] = None,
     ):
         super(LoRAModuleWrapper, self).__init__()
         self.orig_module = orig_module
         self.rank = rank
         self.prefix = prefix
         self.module_filter = module_filter if module_filter is not None else []
-        self.module_block = module_block if module_block is not None else []
+        self.module_exclude_block = module_exclude_block if module_exclude_block is not None else []
 
         self.lora_modules = self.__create_modules(orig_module, alpha)
 
@@ -199,10 +199,10 @@ class LoRAModuleWrapper:
             for name, child_module in orig_module.named_modules():
                 if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
                     print(f"{name} | TRAIN:",end="")
-                    if (len(self.module_block) == 0 and len(self.module_filter) == 0) or \
-                        (len(self.module_block) == 0 and any([x in name for x in self.module_filter])) or \
-                        (any([x in name for x in self.module_block]) and len(self.module_filter) == 0) or \
-                        (any([x in name for x in self.module_block]) and any([x in name for x in self.module_filter])):
+                    if (len(self.module_exclude_block) == 0 and len(self.module_filter) == 0) or \
+                        (len(self.module_exclude_block) == 0 and any([x in name for x in self.module_filter])) or \
+                        (all([not x in name for x in self.module_exclude_block]) and len(self.module_filter) == 0) or \
+                        (all([not x in name for x in self.module_exclude_block]) and any([x in name for x in self.module_filter])):
                         if isinstance(child_module, Linear):
                             print("True")
                             lora_modules[name] = LinearLoRAModule(self.prefix + "_" + name, child_module, self.rank, alpha)

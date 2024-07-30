@@ -100,7 +100,7 @@ class StableDiffusionLoRASetup(
         ) if create_te else None
 
         model.unet_lora = LoRAModuleWrapper(
-            model.unet, config.lora_rank, "lora_unet", config.lora_alpha, module_filter=config.lora_module_name, module_block=config.lora_module_block
+            model.unet, config.lora_rank, "lora_unet", config.lora_alpha, module_filter=config.lora_module_name, module_exclude_block=config.lora_module_exclude_block
         )
 
         if model.lora_state_dict:

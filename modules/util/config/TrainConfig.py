@@ -358,7 +358,7 @@ class TrainConfig(BaseConfig):
     lora_alpha: float
     lora_weight_dtype: DataType
     lora_module_name: list[str]
-    lora_module_block: list[str]
+    lora_module_exclude_block: list[str]
     bundle_additional_embeddings: bool
 
     # optimizer
@@ -798,7 +798,7 @@ class TrainConfig(BaseConfig):
         data.append(("lora_alpha", 1.0, float, False))
         data.append(("lora_weight_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("lora_module_name", ["attentions"], list[str], False))
-        data.append(("lora_module_block", [], list[str], False))
+        data.append(("lora_module_exclude_block", [], list[str], False))
         data.append(("bundle_additional_embeddings", True, bool, False))
 
         # optimizer
