@@ -156,21 +156,21 @@ class StableDiffusionXLLoRASetup(
             model.unet_lora.load_state_dict(model.lora_state_dict)
             model.lora_state_dict = None
 
-        if config.text_encoder.train:
-            model.text_encoder_1_lora.set_dropout(config.dropout_probability)
-        if config.text_encoder_2.train:
-            model.text_encoder_2_lora.set_dropout(config.dropout_probability)
-        model.unet_lora.set_dropout(config.dropout_probability)
+        # if config.text_encoder.train:
+        #     model.text_encoder_1_lora.set_dropout(config.dropout_probability)
+        # if config.text_encoder_2.train:
+        #     model.text_encoder_2_lora.set_dropout(config.dropout_probability)
+        # model.unet_lora.set_dropout(config.dropout_probability)
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_1_lora.hook_to_module()
+            model.text_encoder_1_lora.apply_to()
         if create_te2:
             model.text_encoder_2_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_2_lora.hook_to_module()
+            model.text_encoder_2_lora.apply_to()
 
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-        model.unet_lora.hook_to_module()
+        model.unet_lora.apply_to()
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
