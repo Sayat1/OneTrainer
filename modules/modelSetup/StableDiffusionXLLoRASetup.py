@@ -206,12 +206,14 @@ class StableDiffusionXLLoRASetup(
 
         if config.text_encoder.train:
             model.text_encoder_1.train()
-            print("must true")
-            print(model.text_encoder_1_lora.training)
+            if model.text_encoder_1_lora:
+                print("must true")
+                print(model.text_encoder_1_lora.training)
         else:
             model.text_encoder_1.eval()
-            print("must false")
-            print(model.text_encoder_1_lora.training)
+            if model.text_encoder_1_lora:
+                print("must false")
+                print(model.text_encoder_1_lora.training)
 
         if config.text_encoder_2.train:
             model.text_encoder_2.train()
