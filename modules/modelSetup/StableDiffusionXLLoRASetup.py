@@ -167,13 +167,13 @@ class StableDiffusionXLLoRASetup(
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_1_lora.apply_to()
+            model.text_encoder_1_lora.apply_to(model.text_encoder_1)
         if create_te2:
             model.text_encoder_2_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_2_lora.apply_to()
+            model.text_encoder_2_lora.apply_to(model.text_encoder_2)
 
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-        model.unet_lora.apply_to()
+        model.unet_lora.apply_to(model.unet)
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
