@@ -14,7 +14,7 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.DataType import DataType
 from modules.util.enum.ModelType import ModelType
 from modules.util.modelSpec.ModelSpec import ModelSpec
-
+from lycoris import LycorisNetwork
 
 class StableDiffusionXLModelEmbedding:
     def __init__(
@@ -60,9 +60,9 @@ class StableDiffusionXLModel(BaseModel):
     embedding_wrapper_2: AdditionalEmbeddingWrapper
 
     # persistent lora training data
-    text_encoder_1_lora: LoRAModuleWrapper | None
-    text_encoder_2_lora: LoRAModuleWrapper | None
-    unet_lora: LoRAModuleWrapper | None
+    text_encoder_1_lora: LycorisNetwork | None
+    text_encoder_2_lora: LycorisNetwork | None
+    unet_lora: LycorisNetwork | None
     lora_state_dict: dict | None
 
     sd_config: dict | None

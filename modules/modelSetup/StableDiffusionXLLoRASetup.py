@@ -9,6 +9,7 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
 from lycoris import create_lycoris, LycorisNetwork
+from itertools import chain
 
 class StableDiffusionXLLoRASetup(
     BaseStableDiffusionXLSetup,
@@ -179,7 +180,6 @@ class StableDiffusionXLLoRASetup(
         self._setup_additional_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
-
         init_model_parameters(model, self.create_parameters(model, config))
 
         self._setup_optimizations(model, config)
@@ -206,20 +206,26 @@ class StableDiffusionXLLoRASetup(
 
         if config.text_encoder.train:
             model.text_encoder_1.train()
+            model.text_encoder_1_lora.on_epoch_start()
         else:
             model.text_encoder_1.eval()
+            model.text_encoder_1_lora.eval()
 
         if config.text_encoder_2.train:
             model.text_encoder_2.train()
+            model.text_encoder_2_lora.on_epoch_start()
         else:
             model.text_encoder_2.eval()
+            model.text_encoder_2_lora.eval()
 
         model.vae.eval()
 
         if config.unet.train:
             model.unet.train()
+            model.unet_lora.on_epoch_start()
         else:
             model.unet.eval()
+            model.unet_lora.eval()
 
     def after_optimizer_step(
             self,
