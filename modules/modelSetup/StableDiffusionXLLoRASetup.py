@@ -135,20 +135,20 @@ class StableDiffusionXLLoRASetup(
         # ) if create_te1 else None
 
         LycorisNetwork.LORA_PREFIX = "lora_te1"
-        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=16, linear_alpha=16, algo="loha")
+        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
 
         # model.text_encoder_2_lora = LoRAModuleWrapper(
         #     model.text_encoder_2, config.lora_rank, "lora_te2", config.lora_alpha
         # ) if create_te2 else None
         LycorisNetwork.LORA_PREFIX = "lora_te2"
-        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=16, linear_alpha=16, algo="loha")
+        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
 
         # model.unet_lora = LoRAModuleWrapper(
         #     model.unet, config.lora_rank, "lora_unet", config.lora_alpha, module_filter=config.lora_module_name, module_exclude_block=config.lora_module_exclude_block
         # )
 
         LycorisNetwork.LORA_PREFIX = "lora_unet"
-        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=16, linear_alpha=16, algo="loha")
+        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=16, linear_alpha=16, algo="lora")
 
         if model.lora_state_dict:
             if create_te1:
