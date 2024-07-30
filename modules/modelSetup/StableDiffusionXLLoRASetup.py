@@ -206,26 +206,32 @@ class StableDiffusionXLLoRASetup(
 
         if config.text_encoder.train:
             model.text_encoder_1.train()
-            model.text_encoder_1_lora.on_epoch_start()
+            if model.text_encoder_1_lora:
+                model.text_encoder_1_lora.on_epoch_start()
         else:
             model.text_encoder_1.eval()
-            model.text_encoder_1_lora.eval()
+            if model.text_encoder_1_lora:
+                model.text_encoder_1_lora.eval()
 
         if config.text_encoder_2.train:
             model.text_encoder_2.train()
-            model.text_encoder_2_lora.on_epoch_start()
+            if model.text_encoder_2_lora:
+                model.text_encoder_2_lora.on_epoch_start()
         else:
             model.text_encoder_2.eval()
-            model.text_encoder_2_lora.eval()
+            if model.text_encoder_2_lora:
+                model.text_encoder_2_lora.eval()
 
         model.vae.eval()
 
         if config.unet.train:
             model.unet.train()
-            model.unet_lora.on_epoch_start()
+            if model.unet_lora:
+                model.unet_lora.on_epoch_start()
         else:
             model.unet.eval()
-            model.unet_lora.eval()
+            if model.unet_lora:
+                model.unet_lora.eval()
 
     def after_optimizer_step(
             self,
