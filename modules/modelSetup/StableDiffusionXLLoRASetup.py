@@ -167,13 +167,13 @@ class StableDiffusionXLLoRASetup(
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_1_lora.apply_to(model.text_encoder_1)
+            model.text_encoder_1_lora.apply_to()
         if create_te2:
             model.text_encoder_2_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-            model.text_encoder_2_lora.apply_to(model.text_encoder_2)
+            model.text_encoder_2_lora.apply_to()
 
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-        model.unet_lora.apply_to(model.unet)
+        model.unet_lora.apply_to()
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
@@ -206,32 +206,25 @@ class StableDiffusionXLLoRASetup(
 
         if config.text_encoder.train:
             model.text_encoder_1.train()
-            if model.text_encoder_1_lora:
-                model.text_encoder_1_lora.on_epoch_start()
+            print("must true")
+            print(model.text_encoder_1_lora.training)
         else:
             model.text_encoder_1.eval()
-            if model.text_encoder_1_lora:
-                model.text_encoder_1_lora.eval()
+            print("must false")
+            print(model.text_encoder_1_lora.training)
 
         if config.text_encoder_2.train:
             model.text_encoder_2.train()
-            if model.text_encoder_2_lora:
-                model.text_encoder_2_lora.on_epoch_start()
         else:
             model.text_encoder_2.eval()
-            if model.text_encoder_2_lora:
-                model.text_encoder_2_lora.eval()
 
         model.vae.eval()
 
         if config.unet.train:
             model.unet.train()
-            if model.unet_lora:
-                model.unet_lora.on_epoch_start()
         else:
             model.unet.eval()
-            if model.unet_lora:
-                model.unet_lora.eval()
+
 
     def after_optimizer_step(
             self,
