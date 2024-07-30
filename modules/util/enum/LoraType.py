@@ -2,15 +2,15 @@ from enum import Enum
 
 
 class LoraType(Enum):
-    LORA = 'lora'
-    LOHA = 'loha'
-    LOKR = 'lokr'
-    FULL = "full"
-    IA3 = "ia3"
-    DYLORA = "dylora"
-    GLORA = "glora"
-    DIAGOFT= "diag-oft"
-    BOFT = "boft"
+    LORA = 'LORA'
+    LOHA = 'LOHA'
+    LOKR = 'LOKR'
+    FULL = "FULL"
+    IA3 = "IA3"
+    DYLORA = "DYLORA"
+    GLORA = "GLORA"
+    DIAGOFT= "DIAGOFT-oft"
+    BOFT = "BOFT"
 
     def __str__(self):
         return self.value
