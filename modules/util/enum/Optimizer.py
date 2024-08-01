@@ -102,10 +102,10 @@ class Optimizer(Enum):
                 else:
                     dlrs.update({item[0]:float(item[1])})
             return dlrs
-        if "mecha" in type(optimizers[i]).__name__.lower():
-            s = optimizers[i].state['_mechanic']['s']
-            s_sum = torch.sum(s).item()
+        if "mecha" in type(optimizers[0]).__name__.lower():
             for i,item in enumerate(lrs.items()):
+                s = optimizers[i].state['_mechanic']['s']
+                s_sum = torch.sum(s).item()
                 dlrs.update({f"s*lr[{i}]":float(item[1])*s_sum})
             return dlrs
         return lrs
