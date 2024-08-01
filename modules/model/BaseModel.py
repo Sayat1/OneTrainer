@@ -14,7 +14,7 @@ from modules.util.modelSpec.ModelSpec import ModelSpec
 class BaseModel(metaclass=ABCMeta):
     model_type: ModelType
     parameters: NamedParameterGroupCollection | None
-    optimizer: Optimizer | None
+    optimizers: list[Optimizer] | None
     optimizer_state_dict: dict | None
     param_group_mapping: list[str] | None
     ema: EMAModuleWrapper
@@ -34,7 +34,7 @@ class BaseModel(metaclass=ABCMeta):
     ):
         self.model_type = model_type
         self.parameters = None
-        self.optimizer = None
+        self.optimizers = []
         self.optimizer_state_dict = optimizer_state_dict
         self.param_group_mapping = None
         self.ema_state_dict = ema_state_dict

@@ -9,7 +9,6 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
 from lycoris import create_lycoris, LycorisNetwork
-from itertools import chain
 
 class StableDiffusionXLLoRASetup(
     BaseStableDiffusionXLSetup,

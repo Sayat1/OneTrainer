@@ -50,7 +50,9 @@ def init_model_parameters(
 ):
     model.parameters = parameters
 
-    model.optimizer = create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config)
+    opt_parameters = parameters.parameters_for_optimizer(model.train_config)
+    for opt_param in opt_parameters:
+        model.optimizers.append(create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config, opt_param))
     model.optimizer_state_dict = None
 
     model.ema = create.create_ema(parameters.parameters(), model.ema_state_dict, model.train_config)

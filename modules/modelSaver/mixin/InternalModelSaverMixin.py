@@ -16,7 +16,8 @@ class InternalModelSaverMixin(metaclass=ABCMeta):
     ):
         # optimizer
         os.makedirs(os.path.join(destination, "optimizer"), exist_ok=True)
-        optimizer_state_dict = model.optimizer.state_dict()
+        optimizer_state_dict = {}
+        optimizer_state_dict.update(optimizer.state_dict() for optimizer in model.optimizers)
         optimizer_state_dict["param_group_mapping"] = model.param_group_mapping
         optimizer_state_dict["param_group_optimizer_mapping"] = \
             [str(model.train_config.optimizer.optimizer) for _ in model.param_group_mapping]

@@ -317,11 +317,15 @@ def create_optimizer(
         parameter_group_collection: NamedParameterGroupCollection,
         state_dict: dict | None,
         config: TrainConfig,
+        parameter:list[dict] | None = None
 ) -> torch.optim.Optimizer:
     optimizer = None
     optimizer_config = config.optimizer
 
-    parameters = parameter_group_collection.parameters_for_optimizer(config)
+    if parameter:
+        parameters = parameter
+    else:
+        parameters = parameter_group_collection.parameters_for_optimizer(config)
     match config.optimizer.optimizer:
 
         # SGD Optimizer

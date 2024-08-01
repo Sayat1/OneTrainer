@@ -297,7 +297,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
-            self.model.optimizer.eval()
+            [optimizer.eval() for optimizer in self.model.optimizers]
         torch_gc()
 
         self.callbacks.on_update_status("sampling")
@@ -343,7 +343,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
-            self.model.optimizer.train()
+            [optimizer.train() for optimizer in self.model.optimizers]
 
         torch_gc()
 
@@ -373,7 +373,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
-            self.model.optimizer.eval()
+            [optimizer.eval() for optimizer in self.model.optimizers]
 
         try:
             print("Creating Backup " + backup_path)
@@ -405,7 +405,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
-            self.model.optimizer.train()
+            [optimizer.train() for optimizer in self.model.optimizers]
 
         torch_gc()
 
@@ -424,7 +424,7 @@ class GenericTrainer(BaseTrainer):
             # Special case for schedule-free optimizers.
             if self.config.optimizer.optimizer.is_schedule_free:
                 torch.clear_autocast_cache()
-                self.model.optimizer.eval()
+                [optimizer.eval() for optimizer in self.model.optimizers]
             self.model_saver.save(
                 model=self.model,
                 model_type=self.config.model_type,
@@ -434,7 +434,7 @@ class GenericTrainer(BaseTrainer):
             )
             if self.config.optimizer.optimizer.is_schedule_free:
                 torch.clear_autocast_cache()
-                self.model.optimizer.train()
+                [optimizer.train() for optimizer in self.model.optimizers]
         except:
             traceback.print_exc()
             print("Could not save model. Check your disk space!")
@@ -481,27 +481,28 @@ class GenericTrainer(BaseTrainer):
             if self.config.gradient_accumulation_steps > 1:
                 raise RuntimeError("fused_back_step can not be used if gradient_accumulation_steps > 1")
 
-            for param_group in self.model.optimizer.param_groups:
-                for i, parameter in enumerate(param_group["params"]):
-                    # TODO: Find a better check instead of "parameter.requires_grad".
-                    #       This will break if the some parameters don't require grad during the first training step.
-                    if parameter.requires_grad:
-                        if scaler:
-                            def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
-                                scaler.unscale_parameter_(tensor, self.model.optimizer)
-                                if self.config.max_grad_norm != 0.0:
-                                    nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
-                                scaler.maybe_opt_step_parameter(tensor, param_group, i, self.model.optimizer)
-                                tensor.grad = None
-                        else:
-                            def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
-                                if self.config.max_grad_norm != 0.0:
-                                    nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
-                                self.model.optimizer.step_parameter(tensor, param_group, i)
-                                tensor.grad = None
+            for optimizer in self.model.optimizers:
+                for param_group in optimizer:
+                    for i, parameter in enumerate(param_group["params"]):
+                        # TODO: Find a better check instead of "parameter.requires_grad".
+                        #       This will break if the some parameters don't require grad during the first training step.
+                        if parameter.requires_grad:
+                            if scaler:
+                                def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
+                                    scaler.unscale_parameter_(tensor, optimizer)
+                                    if self.config.max_grad_norm != 0.0:
+                                        nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
+                                    scaler.maybe_opt_step_parameter(tensor, param_group, i, optimizer)
+                                    tensor.grad = None
+                            else:
+                                def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
+                                    if self.config.max_grad_norm != 0.0:
+                                        nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
+                                    optimizer.step_parameter(tensor, param_group, i)
+                                    tensor.grad = None
 
-                        handle = parameter.register_post_accumulate_grad_hook(__grad_hook)
-                        self.grad_hook_handles.append(handle)
+                            handle = parameter.register_post_accumulate_grad_hook(__grad_hook)
+                            self.grad_hook_handles.append(handle)
 
     def __before_eval(self):
         # Special case for schedule-free optimizers, which need eval()
@@ -509,7 +510,7 @@ class GenericTrainer(BaseTrainer):
         # during a refactoring.
         if self.config.optimizer.optimizer.is_schedule_free:
             torch.clear_autocast_cache()
-            self.model.optimizer.eval()
+            [optimizer.eval() for optimizer in self.model.optimizers]
 
     def train(self):
         train_device = torch.device(self.config.train_device)
@@ -552,14 +553,14 @@ class GenericTrainer(BaseTrainer):
             # during a refactoring.
             if self.config.optimizer.optimizer.is_schedule_free:
                 torch.clear_autocast_cache()
-                self.model.optimizer.train()
+                [optimizer.train() for optimizer in self.model.optimizers]
 
             torch_gc()
 
             if lr_scheduler is None:
                 lr_scheduler = create.create_lr_scheduler(
                     config=self.config,
-                    optimizer=self.model.optimizer,
+                    optimizer=self.model.optimizers[0],
                     learning_rate_scheduler=self.config.learning_rate_scheduler,
                     warmup_steps=self.config.learning_rate_warmup_steps,
                     num_cycles=self.config.learning_rate_cycles,
@@ -618,21 +619,24 @@ class GenericTrainer(BaseTrainer):
 
                 if self.__is_update_step(train_progress):
                     if scaler and self.config.optimizer.optimizer.supports_fused_back_pass() and self.config.optimizer.fused_back_pass:
-                        scaler.step_after_unscale_parameter_(self.model.optimizer)
+                        for optimizer in self.model.optimizers:
+                            scaler.step_after_unscale_parameter_(optimizer)
                         scaler.update()
                     elif scaler:
-                        scaler.unscale_(self.model.optimizer)
+                        for optimizer in self.model.optimizers:
+                            scaler.unscale_(optimizer)
                         if self.config.max_grad_norm != 0.0:
                             nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
-                        scaler.step(self.model.optimizer)
+                        for optimizer in self.model.optimizers:
+                            scaler.step(optimizer)
                         scaler.update()
                     else:
                         if self.config.max_grad_norm != 0.0:
                             nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
-                        self.model.optimizer.step()
+                        [optimizer.step() for optimizer in self.model.optimizers]
 
                     lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
-                    self.model.optimizer.zero_grad(set_to_none=True)
+                    [optimizer.zero_grad(set_to_none=True) for optimizer in self.model.optimizers]
                     has_gradient = False
 
                     self.model_setup.report_to_tensorboard(
@@ -683,7 +687,7 @@ class GenericTrainer(BaseTrainer):
             # Special case for schedule-free optimizers.
             if self.config.optimizer.optimizer.is_schedule_free:
                 torch.clear_autocast_cache()
-                self.model.optimizer.eval()
+                [optimizer.eval() for optimizer in self.model.optimizers]
 
             self.callbacks.on_update_status("saving the final model")
 

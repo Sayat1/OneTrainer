@@ -101,7 +101,7 @@ class BaseModelSetup(
             if name not in reported_learning_rates:
                 reported_learning_rates[name] = lr
 
-        reported_learning_rates = config.optimizer.optimizer.maybe_adjust_lrs(reported_learning_rates, model.optimizer)
+        reported_learning_rates = config.optimizer.optimizer.maybe_adjust_lrs(reported_learning_rates, model.optimizers)
 
         for name, lr in reported_learning_rates.items():
             tensorboard.add_scalar(
