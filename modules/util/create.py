@@ -1,5 +1,6 @@
 import ast
 import importlib
+import inspect
 from typing import Iterable
 
 import torch
@@ -880,7 +881,10 @@ def create_optimizer(
 
         optimizer.load_state_dict(state_dict)
 
-    arguments = vars(optimizer).get("defaults",None)
+    init_keys = inspect.signature(type(optimizer).__init__).parameters.keys()
+    arguments:dict = vars(optimizer).get("defaults",None)
+    unused_keys = [arg_key for arg_key in arguments.keys() if not arg_key in init_keys]
+    [arguments.pop(u_key) for u_key in unused_keys]
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
         optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
