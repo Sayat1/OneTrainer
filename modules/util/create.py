@@ -891,7 +891,7 @@ def create_optimizer(
     [arguments.pop(u_key) for u_key in unused_keys]
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
-        optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
+        optimizer = mechanize(type(optimizer),log_func=print,log_every=optimizer_config.log_every if optimizer_config.log_every else 0)(params=parameters,**arguments)
     print(f"using {type(optimizer).__name__} optimizer")
     print(f"final optimizer args | {arguments}")
     del arguments
