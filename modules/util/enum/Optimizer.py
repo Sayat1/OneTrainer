@@ -90,17 +90,15 @@ class Optimizer(Enum):
         dlrs= lrs.copy()
         if self.is_adaptive:
             for i,item in enumerate(lrs.items()):
-                if "dlr" in optimizers[i].param_groups[i]:
-                    dlrs.update({f"dlr[{i}]":optimizers[i].param_groups[i]["dlr"]})
+                if "dlr" in optimizers[i].param_groups[0]:
+                    dlrs.update({f"dlr[{i}]":optimizers[i].param_groups[0]["dlr"]})
                 else:
-                    dlrs.update({f"dlr[{i}]":float(item[1])*optimizers[i].param_groups[i]["d"]})
+                    dlrs.update({f"dlr[{i}]":float(item[1])*optimizers[i].param_groups[0]["d"]})
             return dlrs
         elif self.is_schedule_free:
             for i,item in enumerate(lrs.items()):
-                if "lr_max" in optimizers[i].param_groups[i]:
-                    dlrs.update({f"lr_max[{i}]":optimizers[i].param_groups[i]["lr_max"]})
-                else:
-                    dlrs.update({item[0]:float(item[1])})
+                if "lr_max" in optimizers[i].param_groups[0]:
+                    dlrs.update({f"lr_max[{i}]":optimizers[i].param_groups[0]["lr_max"]})
             return dlrs
         if "mecha" in type(optimizers[0]).__name__.lower():
             for i,item in enumerate(lrs.items()):
