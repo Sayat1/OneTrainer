@@ -257,7 +257,7 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
                 on_update_progress(i + 1, len(timesteps))
 
-            #self.model.unet_to(self.temp_device)
+            self.model.unet_to(self.temp_device)
             torch_gc()
 
             # decode
@@ -584,7 +584,7 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
             on_update_progress(i + 1, len(timesteps))
 
-        #self.model.unet_to(self.temp_device)
+        self.model.unet_to(self.temp_device)
         torch_gc()
 
         # decode
