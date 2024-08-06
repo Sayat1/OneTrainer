@@ -1,5 +1,7 @@
 import inspect
 import os
+import sys
+import psutil
 from pathlib import Path
 from typing import Callable
 
@@ -167,8 +169,9 @@ class StableDiffusionXLSampler(BaseModelSampler):
                 )
 
             combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
-
-            self.model.text_encoder_to(self.temp_device)
+            
+            if psutil.virtual_memory()[1] > 2e+9:
+                self.model.text_encoder_to(self.temp_device)
             torch_gc()
 
             # prepare timesteps
@@ -223,9 +226,7 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
             # denoising loop
             self.model.unet_to(self.train_device)
-            for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
-                if force_last_timestep and timesteps.size(0)-1 == i:
-                    continue
+            for i, timestep in enumerate(tqdm(timesteps, position=0,file=sys.stdout, desc="sampling")):
                 latent_model_input = torch.cat([latent_image] * 2)
                 latent_model_input = noise_scheduler.scale_model_input(latent_model_input, timestep)
 
@@ -258,7 +259,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
                 on_update_progress(i + 1, len(timesteps))
 
-            self.model.unet_to(self.temp_device)
+            if psutil.virtual_memory()[1] > 5e+9:
+                self.model.unet_to(self.temp_device)
             torch_gc()
 
             # decode
@@ -486,7 +488,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
         combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
 
-        self.model.text_encoder_to(self.temp_device)
+        if psutil.virtual_memory()[1] > 2e+9:
+            self.model.text_encoder_to(self.temp_device)
         torch_gc()
 
         # prepare timesteps
@@ -549,7 +552,7 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
         # denoising loop
         self.model.unet_to(self.train_device)
-        for i, timestep in enumerate(tqdm(timesteps, desc="sampling")):
+        for i, timestep in enumerate(tqdm(timesteps, position=0,file=sys.stdout, desc="sampling")):
             latent_model_input = noise_scheduler.scale_model_input(latent_image, timestep)
             latent_model_input = torch.concat(
                 [latent_model_input, latent_mask, latent_conditioning_image], 1
@@ -585,7 +588,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
             on_update_progress(i + 1, len(timesteps))
 
-        self.model.unet_to(self.temp_device)
+        if psutil.virtual_memory()[1] > 5e+9:
+            self.model.unet_to(self.temp_device)
         torch_gc()
 
         # decode
