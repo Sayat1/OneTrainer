@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+import psutil
 from pathlib import Path
 from typing import Callable
 
@@ -270,7 +271,8 @@ class GenericTrainer(BaseTrainer):
                     on_sample = on_sample_custom if is_custom_sample else on_sample_default
                     on_update_progress = self.callbacks.on_update_sample_custom_progress if is_custom_sample else self.callbacks.on_update_sample_default_progress
 
-                    #self.model.to(self.temp_device)
+                    if psutil.virtual_memory()[1] > 6e+9:
+                        self.model.to(self.temp_device)
                     self.model.eval()
 
                     self.model_sampler.sample(

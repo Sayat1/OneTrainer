@@ -1,6 +1,7 @@
 import inspect
 import os
 import sys
+import psutil
 from pathlib import Path
 from typing import Callable
 
@@ -168,8 +169,9 @@ class StableDiffusionXLSampler(BaseModelSampler):
                 )
 
             combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
-
-            #self.model.text_encoder_to(self.temp_device)
+            
+            if psutil.virtual_memory()[1] > 2e+9:
+                self.model.text_encoder_to(self.temp_device)
             torch_gc()
 
             # prepare timesteps
@@ -257,7 +259,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
                 on_update_progress(i + 1, len(timesteps))
 
-            self.model.unet_to(self.temp_device)
+            if psutil.virtual_memory()[1] > 5e+9:
+                self.model.unet_to(self.temp_device)
             torch_gc()
 
             # decode
@@ -485,7 +488,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
         combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
 
-        #self.model.text_encoder_to(self.temp_device)
+        if psutil.virtual_memory()[1] > 2e+9:
+            self.model.text_encoder_to(self.temp_device)
         torch_gc()
 
         # prepare timesteps
@@ -584,7 +588,8 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
             on_update_progress(i + 1, len(timesteps))
 
-        self.model.unet_to(self.temp_device)
+        if psutil.virtual_memory()[1] > 5e+9:
+            self.model.unet_to(self.temp_device)
         torch_gc()
 
         # decode
