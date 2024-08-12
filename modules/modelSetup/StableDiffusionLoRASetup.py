@@ -1,13 +1,19 @@
-import torch
-
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSetup.BaseStableDiffusionSetup import BaseStableDiffusionSetup
 from modules.module.LoRAModule import LoRAModuleWrapper
-from modules.util.NamedParameterGroup import NamedParameterGroupCollection, NamedParameterGroup
-from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+
+PRESETS = {
+    "attn-mlp": ["attentions"],
+    "attn-only": ["attn"],
+    "full": [],
+}
 
 
 class StableDiffusionLoRASetup(
@@ -96,7 +102,7 @@ class StableDiffusionLoRASetup(
 
         create_te = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te")
         model.text_encoder_lora = LoRAModuleWrapper(
-            model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
+            model.text_encoder, "lora_te", config
         ) if create_te else None
 
         model.unet_lora = LoRAModuleWrapper(

@@ -1,14 +1,13 @@
+import os
 import traceback
 
-import torch
-from diffusers import AutoencoderKL, FlowMatchEulerDiscreteScheduler, SD3Transformer2DModel, StableDiffusion3Pipeline
-from transformers import CLIPTokenizer, CLIPTextModelWithProjection, T5Tokenizer, T5EncoderModel
-
 from modules.model.StableDiffusion3Model import StableDiffusion3Model
+from modules.util.enum.ModelType import ModelType
 from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
-from modules.util.enum.DataType import DataType
-from modules.util.enum.ModelType import ModelType
+
+from diffusers import AutoencoderKL, FlowMatchEulerDiscreteScheduler, SD3Transformer2DModel, StableDiffusion3Pipeline
+from transformers import CLIPTextModelWithProjection, CLIPTokenizer, T5EncoderModel, T5Tokenizer
 
 
 class StableDiffusion3ModelLoader:
@@ -26,10 +25,13 @@ class StableDiffusion3ModelLoader:
             include_text_encoder_2: bool,
             include_text_encoder_3: bool,
     ):
-        self.__load_diffusers(
-            model, model_type, weight_dtypes, base_model_name, vae_model_name,
-            include_text_encoder_1, include_text_encoder_2, include_text_encoder_3,
-        )
+        if os.path.isfile(os.path.join(base_model_name, "meta.json")):
+            self.__load_diffusers(
+                model, model_type, weight_dtypes, base_model_name, vae_model_name,
+                include_text_encoder_1, include_text_encoder_2, include_text_encoder_3,
+            )
+        else:
+            raise Exception("not an internal model")
 
     def __load_diffusers(
             self,

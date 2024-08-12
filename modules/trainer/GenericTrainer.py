@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import shutil
@@ -8,15 +9,6 @@ import psutil
 from pathlib import Path
 from typing import Callable
 
-import torch
-from PIL.Image import Image
-from torch import Tensor, nn
-from torch.nn import Parameter
-from torch.utils.hooks import RemovableHandle
-from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms.functional import pil_to_tensor
-from tqdm import tqdm
-
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
 from modules.model.BaseModel import BaseModel
 from modules.modelLoader.BaseModelLoader import BaseModelLoader
@@ -24,19 +16,29 @@ from modules.modelSampler.BaseModelSampler import BaseModelSampler
 from modules.modelSaver.BaseModelSaver import BaseModelSaver
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.trainer.BaseTrainer import BaseTrainer
-from modules.util import path_util, create
-from modules.util.TrainProgress import TrainProgress
+from modules.util import create, path_util
 from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.SampleConfig import SampleConfig
 from modules.util.config.TrainConfig import TrainConfig
-from modules.util.dtype_util import enable_grad_scaling, create_grad_scaler
+from modules.util.dtype_util import create_grad_scaler, enable_grad_scaling
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.time_util import get_string_timestamp
 from modules.util.torch_util import torch_gc
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+from torch import Tensor, nn
+from torch.nn import Parameter
+from torch.utils.hooks import RemovableHandle
+from torch.utils.tensorboard import SummaryWriter
+from torchvision.transforms.functional import pil_to_tensor
+
+from PIL.Image import Image
+from tqdm import tqdm
 
 
 class GenericTrainer(BaseTrainer):
@@ -123,7 +125,7 @@ class GenericTrainer(BaseTrainer):
 
                 print(f"Continuing training from backup '{last_backup_path}'...")
             else:
-                print(f"No backup found, continuing without backup...")
+                print("No backup found, continuing without backup...")
 
         self.callbacks.on_update_status("loading the model")
         self.model = self.model_loader.load(
@@ -218,6 +220,7 @@ class GenericTrainer(BaseTrainer):
                         os.remove(str(yaml_file))
                 except Exception as e:
                     print(f"Could not delete old rolling save {save_file_path}")
+        return
 
     def __enqueue_sample_during_training(self, fun: Callable):
         self.sample_queue.append(fun)
@@ -231,15 +234,15 @@ class GenericTrainer(BaseTrainer):
             self,
             train_progress: TrainProgress,
             train_device: torch.device,
-            sample_params_list: list[SampleConfig],
+            sample_config_list: list[SampleConfig],
             folder_postfix: str = "",
             image_format: ImageFormat = ImageFormat.JPG,
             is_custom_sample: bool = False,
     ):
-        for i, sample_params in enumerate(sample_params_list):
-            if sample_params.enabled:
+        for i, sample_config in enumerate(sample_config_list):
+            if sample_config.enabled:
                 try:
-                    safe_prompt = path_util.safe_filename(sample_params.prompt)
+                    safe_prompt = path_util.safe_filename(sample_config.prompt)
 
                     if is_custom_sample:
                         sample_dir = os.path.join(
@@ -275,12 +278,13 @@ class GenericTrainer(BaseTrainer):
                         self.model.to(self.temp_device)
                     self.model.eval()
 
+                    sample_config = copy.copy(sample_config)
+                    sample_config.from_train_config(self.config)
+
                     self.model_sampler.sample(
-                        sample_params=sample_params,
+                        sample_config=sample_config,
                         destination=sample_path,
                         image_format=self.config.sample_image_format,
-                        text_encoder_layer_skip=self.config.text_encoder_layer_skip,
-                        force_last_timestep=self.config.rescale_noise_scheduler_to_zero_terminal_snr,
                         on_sample=on_sample,
                         on_update_progress=on_update_progress,
                     )
@@ -323,7 +327,7 @@ class GenericTrainer(BaseTrainer):
         self.__sample_loop(
             train_progress=train_progress,
             train_device=train_device,
-            sample_params_list=sample_params_list,
+            sample_config_list=sample_params_list,
             image_format=self.config.sample_image_format,
             is_custom_sample=is_custom_sample,
         )
@@ -336,7 +340,7 @@ class GenericTrainer(BaseTrainer):
             self.__sample_loop(
                 train_progress=train_progress,
                 train_device=train_device,
-                sample_params_list=sample_params_list,
+                sample_config_list=sample_params_list,
                 image_format=self.config.sample_image_format,
                 folder_postfix=" - no-ema",
             )
@@ -398,7 +402,6 @@ class GenericTrainer(BaseTrainer):
             except:
                 traceback.print_exc()
                 print("Could not delete partial backup")
-                pass
         finally:
             if self.config.rolling_backup:
                 self.__prune_backups(self.config.rolling_backup_count)
@@ -446,7 +449,6 @@ class GenericTrainer(BaseTrainer):
             except:
                 traceback.print_exc()
                 print("Could not delete partial save")
-                pass
         finally:
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)

@@ -1,13 +1,24 @@
-import torch
-
 from modules.model.WuerstchenModel import WuerstchenModel
 from modules.modelSetup.BaseWuerstchenSetup import BaseWuerstchenSetup
 from modules.module.LoRAModule import LoRAModuleWrapper
-from modules.util.NamedParameterGroup import NamedParameterGroupCollection, NamedParameterGroup
-from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+
+# This is correct for the latest cascade, but other Wuerstchen models may have
+# different names. I honestly don't know what makes a good preset here so I'm
+# just guessing.
+PRESETS = {
+    "attn-only": ["attention"],
+    "full": [],
+    "down-blocks": ["down_blocks"],
+    "up-blocks": ["up_blocks"],
+    "mapper-only": ["mapper"],
+}
 
 
 class WuerstchenLoRASetup(
@@ -101,11 +112,11 @@ class WuerstchenLoRASetup(
 
         create_te = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_prior_te")
         model.prior_text_encoder_lora = LoRAModuleWrapper(
-            model.prior_text_encoder, config.lora_rank, "lora_prior_te", config.lora_alpha
+            model.prior_text_encoder, "lora_prior_te", config
         ) if create_te else None
 
         model.prior_prior_lora = LoRAModuleWrapper(
-            model.prior_prior, config.lora_rank, "lora_prior_unet", config.lora_alpha, ["attention"]
+            model.prior_prior, "lora_prior_unet", config, config.lora_layers.split(",")
         )
 
         if model.lora_state_dict:

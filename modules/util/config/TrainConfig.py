@@ -3,8 +3,6 @@ import uuid
 from copy import deepcopy
 from typing import Any
 
-from modules.util.ModelNames import ModelNames, EmbeddingName
-from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.config.BaseConfig import BaseConfig
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.SampleConfig import SampleConfig
@@ -19,13 +17,16 @@ from modules.util.enum.LearningRateScheduler import LearningRateScheduler
 from modules.util.enum.LossScaler import LossScaler
 from modules.util.enum.LossWeight import LossWeight
 from modules.util.enum.ModelFormat import ModelFormat
-from modules.util.enum.ModelType import ModelType
+from modules.util.enum.ModelType import ModelType, PeftType
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.TimestepDistribution import TimestepDistribution
+from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.enum.LoraType import LoraType
+from modules.util.ModelNames import EmbeddingName, ModelNames
+from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.torch_util import default_device
 
 
@@ -172,6 +173,7 @@ class TrainModelPartConfig(BaseConfig):
     weight_dtype: DataType
     dropout_probability: float
     train_embedding: bool
+    attention_mask: bool
 
     def __init__(self, data: list[(str, Any, type, bool)]):
         super(TrainModelPartConfig, self).__init__(data)
@@ -190,6 +192,7 @@ class TrainModelPartConfig(BaseConfig):
         data.append(("weight_dtype", DataType.NONE, DataType, False))
         data.append(("dropout_probability", 0.0, float, False))
         data.append(("train_embedding", True, bool, False))
+        data.append(("attention_mask", False, bool, False))
 
         return TrainModelPartConfig(data)
 
@@ -354,9 +357,12 @@ class TrainConfig(BaseConfig):
     embedding_weight_dtype: DataType
 
     # lora
+    peft_type: PeftType
     lora_model_name: str
     lora_rank: int
     lora_alpha: float
+    lora_decompose: bool
+    lora_decompose_norm_epsilon: bool
     lora_weight_dtype: DataType
     lora_type: LoraType
     lycoris_options: dict
@@ -794,9 +800,12 @@ class TrainConfig(BaseConfig):
         data.append(("embedding_weight_dtype", DataType.FLOAT_32, DataType, False))
 
         # lora
+        data.append(("peft_type", PeftType.LORA, PeftType, False))
         data.append(("lora_model_name", "", str, False))
         data.append(("lora_rank", 16, int, False))
         data.append(("lora_alpha", 1.0, float, False))
+        data.append(("lora_decompose", False, bool, False))
+        data.append(("lora_decompose_norm_epsilon", True, bool, False))
         data.append(("lora_weight_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("lora_type", LoraType.LORA, LoraType, False))
         data.append(("lycoris_options", {}, dict, False))

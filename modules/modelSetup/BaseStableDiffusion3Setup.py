@@ -1,12 +1,6 @@
 from abc import ABCMeta
 from random import Random
 
-import torch
-from diffusers.models.attention_processor import JointAttnProcessor2_0
-from diffusers.utils import is_xformers_available
-from torch import Tensor
-from torch.utils.checkpoint import checkpoint
-
 from modules.model.StableDiffusion3Model import StableDiffusion3Model, StableDiffusion3ModelEmbedding
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.modelSetup.mixin.ModelSetupDebugMixin import ModelSetupDebugMixin
@@ -14,17 +8,25 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupFlowMatchingMixin import ModelSetupFlowMatchingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import \
-    enable_checkpointing_for_clip_encoder_layers, \
-    create_checkpointed_forward, enable_checkpointing_for_t5_encoder_layers, \
-    enable_checkpointing_for_stable_diffusion_3_transformer
+from modules.modelSetup.stableDiffusion.checkpointing_util import (
+    create_checkpointed_forward,
+    enable_checkpointing_for_clip_encoder_layers,
+    enable_checkpointing_for_stable_diffusion_3_transformer,
+    enable_checkpointing_for_t5_encoder_layers,
+)
 from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
-from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
 from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+from torch import Tensor
+
+from diffusers.models.attention_processor import JointAttnProcessor2_0
+from diffusers.utils import is_xformers_available
 
 
 class BaseStableDiffusion3Setup(
@@ -309,6 +311,9 @@ class BaseStableDiffusion3Setup(
             tokens_1: Tensor = None,
             tokens_2: Tensor = None,
             tokens_3: Tensor = None,
+            tokens_mask_1: Tensor = None,
+            tokens_mask_2: Tensor = None,
+            tokens_mask_3: Tensor = None,
             text_encoder_1_output: Tensor = None,
             pooled_text_encoder_1_output: Tensor = None,
             text_encoder_2_output: Tensor = None,
@@ -366,6 +371,11 @@ class BaseStableDiffusion3Setup(
                 device=self.train_device,
                 dtype=model.train_dtype.torch_dtype(),
             )
+            tokens_mask_1 = torch.zeros(
+                size=(batch_size, 1),
+                device=self.train_device,
+                dtype=model.train_dtype.torch_dtype(),
+            )
 
         if (text_encoder_2_output is None or pooled_text_encoder_2_output is None) \
                 and model.text_encoder_2 is not None:
@@ -385,6 +395,11 @@ class BaseStableDiffusion3Setup(
                 device=self.train_device,
                 dtype=model.train_dtype.torch_dtype(),
             )
+            tokens_mask_2 = torch.zeros(
+                size=(batch_size, 1),
+                device=self.train_device,
+                dtype=model.train_dtype.torch_dtype(),
+            )
 
         with model.text_encoder_3_autocast_context:
             if text_encoder_3_output is None \
@@ -396,6 +411,11 @@ class BaseStableDiffusion3Setup(
             if text_encoder_3_output is None:
                 text_encoder_3_output = torch.zeros(
                     size=(batch_size, 77, model.transformer.config.joint_attention_dim),
+                    device=self.train_device,
+                    dtype=model.train_dtype.torch_dtype(),
+                )
+                tokens_mask_3 = torch.zeros(
+                    size=(batch_size, 1),
                     device=self.train_device,
                     dtype=model.train_dtype.torch_dtype(),
                 )
@@ -414,6 +434,11 @@ class BaseStableDiffusion3Setup(
         text_encoder_1_output = text_encoder_1_output * dropout_text_encoder_1_mask[:, None, None]
         text_encoder_2_output = text_encoder_2_output * dropout_text_encoder_2_mask[:, None, None]
         text_encoder_3_output = text_encoder_3_output * dropout_text_encoder_3_mask[:, None, None]
+
+        if config.prior.attention_mask:
+            text_encoder_1_output *= tokens_mask_1[:, :, None]
+            text_encoder_2_output *= tokens_mask_2[:, :, None]
+            text_encoder_3_output *= tokens_mask_3[:, :, None]
 
         pooled_text_encoder_1_output = pooled_text_encoder_1_output * dropout_text_encoder_1_mask[:, None]
         pooled_text_encoder_2_output = pooled_text_encoder_2_output * dropout_text_encoder_2_mask[:, None]
@@ -461,6 +486,9 @@ class BaseStableDiffusion3Setup(
                 tokens_1=batch['tokens_1'] if 'tokens_1' in batch else None,
                 tokens_2=batch['tokens_2'] if 'tokens_2' in batch else None,
                 tokens_3=batch['tokens_3'] if 'tokens_3' in batch else None,
+                tokens_mask_1=batch['tokens_mask_1'] if 'tokens_mask_1' in batch else None,
+                tokens_mask_2=batch['tokens_mask_2'] if 'tokens_mask_2' in batch else None,
+                tokens_mask_3=batch['tokens_mask_3'] if 'tokens_mask_3' in batch else None,
                 text_encoder_1_output=batch['text_encoder_1_hidden_state'] \
                     if 'text_encoder_1_hidden_state' in batch and not config.train_text_encoder_or_embedding() else None,
                 pooled_text_encoder_1_output=batch['text_encoder_1_pooled_state'] \

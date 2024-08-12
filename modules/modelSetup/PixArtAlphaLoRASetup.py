@@ -1,13 +1,19 @@
-import torch
-
 from modules.model.PixArtAlphaModel import PixArtAlphaModel
 from modules.modelSetup.BasePixArtAlphaSetup import BasePixArtAlphaSetup
 from modules.module.LoRAModule import LoRAModuleWrapper
-from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
-from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
+from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+
+PRESETS = {
+    "attn-mlp": ["attn1", "attn2", "ff.net"],
+    "attn-only": ["attn1", "attn2"],
+    "full": [],
+}
 
 
 class PixArtAlphaLoRASetup(
@@ -97,11 +103,11 @@ class PixArtAlphaLoRASetup(
 
         create_te = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te")
         model.text_encoder_lora = LoRAModuleWrapper(
-            model.text_encoder, config.lora_rank, "lora_te", config.lora_alpha
+            model.text_encoder, "lora_te", config
         ) if create_te else None
 
         model.transformer_lora = LoRAModuleWrapper(
-            model.transformer, config.lora_rank, "lora_transformer", config.lora_alpha, ["attn1", "attn2"]
+            model.transformer, "lora_transformer", config, config.lora_layers.split(",")
         )
 
         if model.lora_state_dict:
