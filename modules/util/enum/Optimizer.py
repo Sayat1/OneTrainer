@@ -96,7 +96,7 @@ class Optimizer(Enum):
                 else:
                     dlrs.update({f"dlr[{i}]":float(item[1])*optimizers[i].param_groups[0]["d"]})
             return dlrs
-        elif self.is_schedule_free or "schedulefree" in type(optimizer).__name__.lower():
+        elif self.is_schedule_free or "schedulefree" in type(optimizers[0]).__name__.lower():
             for i,item in enumerate(lrs.items()):
                 if "lr_max" in optimizers[i].param_groups[0]:
                     dlrs.update({f"lr_max[{i}]":optimizers[i].param_groups[0]["lr_max"]})
