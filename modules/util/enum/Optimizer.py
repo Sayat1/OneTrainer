@@ -72,7 +72,6 @@ class Optimizer(Enum):
 
     @property
     def is_schedule_free(self):
-        self.
         return self in [
             self.SCHEDULE_FREE_ADAMW,
             self.SCHEDULE_FREE_SGD,
