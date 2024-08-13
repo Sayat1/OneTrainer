@@ -6,21 +6,18 @@ from pathlib import Path
 from tkinter import filedialog
 from typing import Callable
 
-import customtkinter as ctk
-import torch
-
 from modules.trainer.GenericTrainer import GenericTrainer
+from modules.ui.AdditionalEmbeddingsTab import AdditionalEmbeddingsTab
 from modules.ui.CaptionUI import CaptionUI
 from modules.ui.ConceptTab import ConceptTab
 from modules.ui.ConvertModelUI import ConvertModelUI
-from modules.ui.AdditionalEmbeddingsTab import AdditionalEmbeddingsTab
+from modules.ui.LoraTab import LoraTab
 from modules.ui.ModelTab import ModelTab
 from modules.ui.ProfilingWindow import ProfilingWindow
 from modules.ui.SampleWindow import SampleWindow
 from modules.ui.SamplingTab import SamplingTab
 from modules.ui.TopBar import TopBar
 from modules.ui.TrainingTab import TrainingTab
-from modules.util.TrainProgress import TrainProgress
 from modules.util.callbacks.TrainCallbacks import TrainCallbacks
 from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.TrainConfig import TrainConfig
@@ -29,9 +26,14 @@ from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.torch_util import torch_gc
+from modules.util.TrainProgress import TrainProgress
 from modules.util.ui import components
 from modules.util.ui.UIState import UIState
 from modules.zluda import ZLUDA
+
+import torch
+
+import customtkinter as ctk
 
 
 class TrainUI(ctk.CTk):
@@ -67,6 +69,7 @@ class TrainUI(ctk.CTk):
 
         self.model_tab = None
         self.training_tab = None
+        self.lora_tab = None
         self.additional_embeddings_tab = None
 
         self.top_bar_component = self.top_bar(self)
@@ -453,6 +456,9 @@ class TrainUI(ctk.CTk):
         if self.training_tab:
             self.training_tab.refresh_ui()
 
+        if self.lora_tab:
+            self.lora_tab.refresh_ui()
+
     def change_training_method(self, training_method: TrainingMethod):
         if not self.tabview:
             return
@@ -462,11 +468,12 @@ class TrainUI(ctk.CTk):
 
         if training_method != TrainingMethod.LORA and "LoRA" in self.tabview._tab_dict:
             self.tabview.delete("LoRA")
+            self.lora_tab = None
         if training_method != TrainingMethod.EMBEDDING and "embedding" in self.tabview._tab_dict:
             self.tabview.delete("embedding")
 
         if training_method == TrainingMethod.LORA and "LoRA" not in self.tabview._tab_dict:
-            self.lora_tab(self.tabview.add("LoRA"))
+            self.lora_tab = LoraTab(self.tabview.add("LoRA"), self.train_config, self.ui_state)
         if training_method == TrainingMethod.EMBEDDING and "embedding" not in self.tabview._tab_dict:
             self.embedding_tab(self.tabview.add("embedding"))
 
@@ -483,11 +490,9 @@ class TrainUI(ctk.CTk):
     def on_update_train_progress(self, train_progress: TrainProgress, max_sample: int, max_epoch: int):
         self.set_step_progress(train_progress.epoch_step, max_sample)
         self.set_epoch_progress(train_progress.epoch, max_epoch)
-        pass
 
     def on_update_status(self, status: str):
         self.status_label.configure(text=status)
-        pass
 
     def open_dataset_tool(self):
         window = CaptionUI(self, None, False)

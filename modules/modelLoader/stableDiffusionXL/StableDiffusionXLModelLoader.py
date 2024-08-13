@@ -1,16 +1,22 @@
+import os
 import traceback
-
-from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, StableDiffusionXLPipeline, \
-    StableDiffusionXLInpaintPipeline
-from transformers import CLIPTokenizer, CLIPTextModel, CLIPTextModelWithProjection
 
 from modules.model.StableDiffusionXLModel import StableDiffusionXLModel
 from modules.modelLoader.mixin.SDConfigModelLoaderMixin import SDConfigModelLoaderMixin
 from modules.util import create
-from modules.util.ModelNames import ModelNames
-from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
+from modules.util.ModelNames import ModelNames
+from modules.util.ModelWeightDtypes import ModelWeightDtypes
+
+from diffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    StableDiffusionXLInpaintPipeline,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
+from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
 
 
 class StableDiffusionXLModelLoader(
@@ -39,7 +45,10 @@ class StableDiffusionXLModelLoader(
             base_model_name: str,
             vae_model_name: str,
     ):
-        self.__load_diffusers(model, model_type, weight_dtypes, base_model_name, vae_model_name)
+        if os.path.isfile(os.path.join(base_model_name, "meta.json")):
+            self.__load_diffusers(model, model_type, weight_dtypes, base_model_name, vae_model_name)
+        else:
+            raise Exception("not an internal model")
 
     def __load_diffusers(
             self,

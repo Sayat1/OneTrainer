@@ -1,8 +1,16 @@
 import os
 import re
 
+from modules.dataLoader.BaseDataLoader import BaseDataLoader
+from modules.model.StableDiffusion3Model import StableDiffusion3Model
+from modules.util import path_util
+from modules.util.config.TrainConfig import TrainConfig
+from modules.util.torch_util import torch_gc
+from modules.util.TrainProgress import TrainProgress
+
 import torch
-from mgds.MGDS import TrainDataLoader, MGDS
+
+from mgds.MGDS import MGDS, TrainDataLoader
 from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
 from mgds.pipelineModules.AspectBucketing import AspectBucketing
@@ -43,13 +51,6 @@ from mgds.pipelineModules.ShuffleTags import ShuffleTags
 from mgds.pipelineModules.SingleAspectCalculation import SingleAspectCalculation
 from mgds.pipelineModules.Tokenize import Tokenize
 from mgds.pipelineModules.VariationSorting import VariationSorting
-
-from modules.dataLoader.BaseDataLoader import BaseDataLoader
-from modules.model.StableDiffusion3Model import StableDiffusion3Model
-from modules.util import path_util
-from modules.util.TrainProgress import TrainProgress
-from modules.util.config.TrainConfig import TrainConfig
-from modules.util.torch_util import torch_gc
 
 
 class StableDiffusion3BaseDataLoader(BaseDataLoader):
@@ -137,7 +138,7 @@ class StableDiffusion3BaseDataLoader(BaseDataLoader):
     def _mask_augmentation_modules(self, config: TrainConfig) -> list:
         inputs = ['image']
 
-        lowest_resolution = min([int(x.strip()) for x in re.split('\D', config.resolution) if x.strip() != ''])
+        lowest_resolution = min([int(x.strip()) for x in re.split(r'\D', config.resolution) if x.strip() != ''])
         circular_mask_shrink = RandomCircularMaskShrink(mask_name='mask', shrink_probability=1.0, shrink_factor_min=0.2, shrink_factor_max=1.0, enabled_in_name='concept.image.enable_random_circular_mask_shrink')
         random_mask_rotate_crop = RandomMaskRotateCrop(mask_name='mask', additional_names=inputs, min_size=lowest_resolution, min_padding_percent=10, max_padding_percent=30, max_rotate_angle=20, enabled_in_name='concept.image.enable_random_mask_rotate_crop')
 
@@ -290,24 +291,27 @@ class StableDiffusion3BaseDataLoader(BaseDataLoader):
 
         sort_names = image_aggregate_names + image_split_names + [
             'prompt',
-            'tokens_1', 'text_encoder_1_hidden_state', 'text_encoder_1_pooled_state',
-            'tokens_2', 'text_encoder_2_hidden_state', 'text_encoder_2_pooled_state',
-            'tokens_3', 'text_encoder_3_hidden_state',
+            'tokens_1', 'tokens_mask_1', 'text_encoder_1_hidden_state', 'text_encoder_1_pooled_state',
+            'tokens_2', 'tokens_mask_2', 'text_encoder_2_hidden_state', 'text_encoder_2_pooled_state',
+            'tokens_3', 'tokens_mask_3', 'text_encoder_3_hidden_state',
             'concept'
         ]
 
         if not config.train_text_encoder_or_embedding():
             text_split_names.append('tokens_1')
+            text_split_names.append('tokens_mask_1')
             text_split_names.append('text_encoder_1_hidden_state')
             text_split_names.append('text_encoder_1_pooled_state')
 
         if not config.train_text_encoder_2_or_embedding():
             text_split_names.append('tokens_2')
+            text_split_names.append('tokens_mask_2')
             text_split_names.append('text_encoder_2_hidden_state')
             text_split_names.append('text_encoder_2_pooled_state')
 
         if not config.train_text_encoder_3_or_embedding():
             text_split_names.append('tokens_3')
+            text_split_names.append('tokens_mask_3')
             text_split_names.append('text_encoder_3_hidden_state')
 
         image_cache_dir = os.path.join(config.cache_dir, "image")
@@ -361,6 +365,7 @@ class StableDiffusion3BaseDataLoader(BaseDataLoader):
         output_names = [
             'image_path', 'latent_image',
             'tokens_1', 'tokens_2', 'tokens_3',
+            'tokens_mask_1', 'tokens_mask_2', 'tokens_mask_3',
             'original_resolution', 'crop_resolution', 'crop_offset', 'prompt',
         ]
 

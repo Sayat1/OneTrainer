@@ -3,12 +3,6 @@ import importlib
 import inspect
 from typing import Iterable
 
-import torch
-from diffusers import DDIMScheduler, EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, \
-    DPMSolverMultistepScheduler, UniPCMultistepScheduler, SchedulerMixin
-from torch.nn import Parameter
-from torch.optim.lr_scheduler import LambdaLR, LRScheduler, SequentialLR
-
 from modules.dataLoader.PixArtAlphaBaseDataLoader import PixArtAlphaBaseDataLoader
 from modules.dataLoader.StableDiffusion3BaseDataLoader import StableDiffusion3BaseDataLoader
 from modules.dataLoader.StableDiffusionBaseDataLoader import StableDiffusionBaseDataLoader
@@ -73,8 +67,6 @@ from modules.modelSetup.WuerstchenEmbeddingSetup import WuerstchenEmbeddingSetup
 from modules.modelSetup.WuerstchenFineTuneSetup import WuerstchenFineTuneSetup
 from modules.modelSetup.WuerstchenLoRASetup import WuerstchenLoRASetup
 from modules.module.EMAModule import EMAModuleWrapper
-from modules.util.NamedParameterGroup import NamedParameterGroupCollection
-from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.EMAMode import EMAMode
 from modules.util.enum.LearningRateScheduler import LearningRateScheduler
@@ -83,9 +75,24 @@ from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.lr_scheduler_util import *
+from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer.adafactor_extensions import patch_adafactor
 from modules.util.optimizer.adam_extensions import patch_adam
 from modules.util.optimizer.adamw_extensions import patch_adamw
+from modules.util.TrainProgress import TrainProgress
+
+import torch
+from torch.nn import Parameter
+from torch.optim.lr_scheduler import LambdaLR, LRScheduler, SequentialLR
+
+from diffusers import (
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    SchedulerMixin,
+    UniPCMultistepScheduler,
+)
 
 
 def create_model_loader(
@@ -889,6 +896,10 @@ def create_optimizer(
     arguments:dict = vars(optimizer).get("defaults",None)
     unused_keys = [arg_key for arg_key in arguments.keys() if not arg_key in init_keys]
     [arguments.pop(u_key) for u_key in unused_keys]
+    if config.use_schedulefree_wraper:
+        from schedulefree import ScheduleFreeWrapper
+        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9, weight_decay_at_y=arguments.get("weight_decay",0.0))
+        optimizer.__name__ = "ScheduleFree" + optimizer.__name__
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
         optimizer = mechanize(type(optimizer),log_func=print,log_every=optimizer_config.log_every if optimizer_config.log_every else 0)(params=parameters,**arguments)

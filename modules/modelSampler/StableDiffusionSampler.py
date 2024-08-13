@@ -4,20 +4,21 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-import torch
-from PIL import Image
-from torch import nn
-from torchvision.transforms import transforms
-from tqdm import tqdm
-
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSampler.BaseModelSampler import BaseModelSampler
 from modules.util import create
+from modules.util.config.SampleConfig import SampleConfig
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
-from modules.util.config.SampleConfig import SampleConfig
 from modules.util.torch_util import torch_gc
+
+import torch
+from torch import nn
+from torchvision.transforms import transforms
+
+from PIL import Image
+from tqdm import tqdm
 
 
 class StableDiffusionSampler(BaseModelSampler):
@@ -197,15 +198,15 @@ class StableDiffusionSampler(BaseModelSampler):
 
             return image[0]
 
-    def __create_erode_kernel(self, device):
+    def __create_erode_kernel(self, device, dtype=torch.float32):
         kernel_radius = 2
 
         kernel_size = kernel_radius * 2 + 1
-        kernel_weights = torch.ones(1, 1, kernel_size, kernel_size) / (kernel_size * kernel_size)
+        kernel_weights = torch.ones(1, 1, kernel_size, kernel_size, dtype=dtype) / (kernel_size * kernel_size)
         kernel = nn.Conv2d(
             in_channels=1, out_channels=1, kernel_size=kernel_size, bias=False, padding_mode='replicate',
             padding=kernel_radius
-        )
+        ).to(dtype)
         kernel.weight.data = kernel_weights
         kernel.requires_grad_(False)
         kernel.to(device)
@@ -269,9 +270,9 @@ class StableDiffusionSampler(BaseModelSampler):
                     device=self.train_device,
                 )
 
-                erode_kernel = self.__create_erode_kernel(self.train_device)
+                erode_kernel = self.__create_erode_kernel(self.train_device, dtype=self.model.train_dtype.torch_dtype())
                 eroded_mask = erode_kernel(mask)
-                eroded_mask = (eroded_mask > 0.5).float()
+                eroded_mask = (eroded_mask > 0.5).to(dtype=self.model.train_dtype.torch_dtype())
 
                 image = (image * 2.0) - 1.0
                 conditioning_image = (image * (1 - eroded_mask))
@@ -286,7 +287,7 @@ class StableDiffusionSampler(BaseModelSampler):
                     antialias=True
                 )
                 latent_mask = rescale_mask(mask)
-                latent_mask = (latent_mask > 0).float()
+                latent_mask = (latent_mask > 0).to(dtype=self.model.train_dtype.torch_dtype())
                 latent_mask = latent_mask.unsqueeze(0)
             else:
                 conditioning_image = torch.zeros(
@@ -440,50 +441,48 @@ class StableDiffusionSampler(BaseModelSampler):
 
     def sample(
             self,
-            sample_params: SampleConfig,
+            sample_config: SampleConfig,
             destination: str,
             image_format: ImageFormat,
-            text_encoder_layer_skip: int,
-            force_last_timestep: bool = False,
-            on_sample: Callable[[Image.Image], None] = lambda _: None,
+            on_sample: Callable[[Image], None] = lambda _: None,
             on_update_progress: Callable[[int, int], None] = lambda _, __: None,
     ):
-        prompt = self.model.add_embeddings_to_prompt(sample_params.prompt)
-        negative_prompt = self.model.add_embeddings_to_prompt(sample_params.negative_prompt)
+        prompt = self.model.add_embeddings_to_prompt(sample_config.prompt)
+        negative_prompt = self.model.add_embeddings_to_prompt(sample_config.negative_prompt)
 
         if self.model_type.has_conditioning_image_input():
             image = self.__sample_inpainting(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                height=sample_params.height,
-                width=sample_params.width,
-                seed=sample_params.seed,
-                random_seed=sample_params.random_seed,
-                diffusion_steps=sample_params.diffusion_steps,
-                cfg_scale=sample_params.cfg_scale,
-                noise_scheduler=sample_params.noise_scheduler,
-                cfg_rescale=0.7 if force_last_timestep else 0.0,
-                sample_inpainting=sample_params.sample_inpainting,
-                base_image_path=sample_params.base_image_path,
-                mask_image_path=sample_params.mask_image_path,
-                text_encoder_layer_skip=text_encoder_layer_skip,
-                force_last_timestep=force_last_timestep,
+                height=sample_config.height,
+                width=sample_config.width,
+                seed=sample_config.seed,
+                random_seed=sample_config.random_seed,
+                diffusion_steps=sample_config.diffusion_steps,
+                cfg_scale=sample_config.cfg_scale,
+                noise_scheduler=sample_config.noise_scheduler,
+                cfg_rescale=0.7 if sample_config.force_last_timestep else 0.0,
+                sample_inpainting=sample_config.sample_inpainting,
+                base_image_path=sample_config.base_image_path,
+                mask_image_path=sample_config.mask_image_path,
+                text_encoder_layer_skip=sample_config.text_encoder_1_layer_skip,
+                force_last_timestep=sample_config.force_last_timestep,
                 on_update_progress=on_update_progress,
             )
         else:
             image = self.__sample_base(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                height=sample_params.height,
-                width=sample_params.width,
-                seed=sample_params.seed,
-                random_seed=sample_params.random_seed,
-                diffusion_steps=sample_params.diffusion_steps,
-                cfg_scale=sample_params.cfg_scale,
-                noise_scheduler=sample_params.noise_scheduler,
-                cfg_rescale=0.7 if force_last_timestep else 0.0,
-                text_encoder_layer_skip=text_encoder_layer_skip,
-                force_last_timestep=force_last_timestep,
+                height=sample_config.height,
+                width=sample_config.width,
+                seed=sample_config.seed,
+                random_seed=sample_config.random_seed,
+                diffusion_steps=sample_config.diffusion_steps,
+                cfg_scale=sample_config.cfg_scale,
+                noise_scheduler=sample_config.noise_scheduler,
+                cfg_rescale=0.7 if sample_config.force_last_timestep else 0.0,
+                text_encoder_layer_skip=sample_config.text_encoder_1_layer_skip,
+                force_last_timestep=sample_config.force_last_timestep,
                 on_update_progress=on_update_progress,
             )
 
