@@ -300,7 +300,7 @@ class GenericTrainer(BaseTrainer):
             sample_params_list: list[SampleConfig] = None,
     ):
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             self.model.optimizer.eval()
         torch_gc()
@@ -346,7 +346,7 @@ class GenericTrainer(BaseTrainer):
 
         self.model_setup.setup_train_device(self.model, self.config)
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             self.model.optimizer.train()
 
@@ -376,7 +376,7 @@ class GenericTrainer(BaseTrainer):
         backup_path = os.path.abspath(os.path.join(self.config.workspace_dir, "backup", backup_name))
 
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             self.model.optimizer.eval()
 
@@ -407,7 +407,7 @@ class GenericTrainer(BaseTrainer):
 
         self.model_setup.setup_train_device(self.model, self.config)
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             self.model.optimizer.train()
 
@@ -426,7 +426,7 @@ class GenericTrainer(BaseTrainer):
                 self.model.ema.copy_ema_to(self.parameters, store_temp=True)
 
             # Special case for schedule-free optimizers.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 self.model.optimizer.eval()
             self.model_saver.save(
@@ -436,7 +436,7 @@ class GenericTrainer(BaseTrainer):
                 output_model_destination=save_path,
                 dtype=self.config.output_dtype.torch_dtype()
             )
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 self.model.optimizer.train()
         except:
@@ -510,7 +510,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers, which need eval()
         # called before evaluation. Can and should move this to a callback
         # during a refactoring.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             self.model.optimizer.eval()
 
@@ -553,7 +553,7 @@ class GenericTrainer(BaseTrainer):
             # Special case for schedule-free optimizers, which need train()
             # called before training. Can and should move this to a callback
             # during a refactoring.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 self.model.optimizer.train()
 
@@ -684,7 +684,7 @@ class GenericTrainer(BaseTrainer):
             if self.config.backup_before_save:
                 self.backup(self.model.train_progress)
             # Special case for schedule-free optimizers.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 self.model.optimizer.eval()
 

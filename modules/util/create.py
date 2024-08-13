@@ -896,7 +896,7 @@ def create_optimizer(
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
         optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
-    if config.use_schedulefree_wraper:
+    if config.use_schedulefree_wrapper:
         from schedulefree import ScheduleFreeWrapper
         optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9, weight_decay_at_y=arguments.get("weight_decay",0.0))
         optimizer.__name__ = "ScheduleFree" + optimizer.__name__
