@@ -893,6 +893,10 @@ def create_optimizer(
     arguments:dict = vars(optimizer).get("defaults",None)
     unused_keys = [arg_key for arg_key in arguments.keys() if not arg_key in init_keys]
     [arguments.pop(u_key) for u_key in unused_keys]
+    if config.use_schedulefree_wraper:
+        from schedulefree import ScheduleFreeWrapper
+        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9, weight_decay_at_y=arguments.get("weight_decay",0.0))
+        optimizer.__name__ = "ScheduleFree" + optimizer.__name__
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
         optimizer = mechanize(type(optimizer))(params=parameters,**arguments)

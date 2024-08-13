@@ -72,6 +72,7 @@ class Optimizer(Enum):
 
     @property
     def is_schedule_free(self):
+        self.
         return self in [
             self.SCHEDULE_FREE_ADAMW,
             self.SCHEDULE_FREE_SGD,
@@ -95,7 +96,7 @@ class Optimizer(Enum):
                 else:
                     dlrs.update({f"dlr[{i}]":float(item[1])*optimizer.param_groups[i]["d"]})
             return dlrs
-        elif self.is_schedule_free:
+        elif self.is_schedule_free or "schedulefree" in type(optimizer).__name__.lower():
             for i,item in enumerate(lrs.items()):
                 if "lr_max" in optimizer.param_groups[i]:
                     dlrs.update({f"lr_max[{i}]":optimizer.param_groups[i]["lr_max"]})
