@@ -372,6 +372,7 @@ class TrainConfig(BaseConfig):
     optimizer: TrainOptimizerConfig
     optimizer_defaults: dict[str, TrainOptimizerConfig]
     use_mechanic:bool
+    use_schedulefree_wrapper:bool
 
     # sample settings
     sample_definition_file_name: str
@@ -815,6 +816,7 @@ class TrainConfig(BaseConfig):
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
         data.append(("optimizer_defaults", {}, dict[str, TrainOptimizerConfig], False))
         data.append(("use_mechanic", False, bool, False))
+        data.append(("use_schedulefree_wrapper", False, bool, False))
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
