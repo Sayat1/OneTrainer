@@ -897,7 +897,7 @@ def create_optimizer(
         optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
     if config.use_schedulefree_wrapper:
         from schedulefree import ScheduleFreeWrapper
-        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9, \
+        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9,warmup_steps=config.learning_rate_warmup_steps, \
                                         weight_lr_power=optimizer_config.weight_lr_power if optimizer_config.weight_lr_power is not None else 2.0, \
                                         weight_decay_at_y=arguments.get("weight_decay",0.0))
         #optimizer.__name__ = "ScheduleFree" + optimizer.__name__
@@ -950,7 +950,7 @@ def create_lr_scheduler(
     scheduler_steps = total_steps - warmup_steps
 
     # Force schedule-free algorithms to constant schedule.
-    if config.optimizer.optimizer.is_schedule_free:
+    if config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper:
         learning_rate_scheduler = LearningRateScheduler.CONSTANT
 
     match learning_rate_scheduler:
@@ -1033,7 +1033,7 @@ def create_lr_scheduler(
         case _:
             lr_lambda = lr_lambda_constant()
 
-    if warmup_steps > 0 and not config.optimizer.optimizer.is_schedule_free:
+    if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
         lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
 
     return LambdaLR(
