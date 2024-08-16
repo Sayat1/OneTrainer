@@ -598,11 +598,12 @@ class GenericTrainer(BaseTrainer):
                 if not has_gradient:
                     self.__execute_sample_during_training()
 
-                if self.__needs_backup(train_progress) or self.commands.get_and_reset_backup_command():
-                    self.backup(train_progress)
+                if self.one_step_trained:
+                    if self.__needs_backup(train_progress) or self.commands.get_and_reset_backup_command():
+                        self.backup(train_progress)
 
-                if self.__needs_save(train_progress) or self.commands.get_and_reset_save_command():
-                    self.save(train_progress)
+                    if self.__needs_save(train_progress) or self.commands.get_and_reset_save_command():
+                        self.save(train_progress)
 
                 self.callbacks.on_update_status("training")
 
