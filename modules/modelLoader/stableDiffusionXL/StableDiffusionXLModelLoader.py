@@ -81,7 +81,6 @@ class StableDiffusionXLModelLoader(
             base_model_name,
             subfolder="text_encoder",
             torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
-            device_map="auto",
         )
         text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
 
@@ -89,7 +88,6 @@ class StableDiffusionXLModelLoader(
             base_model_name,
             subfolder="text_encoder_2",
             torch_dtype=weight_dtypes.text_encoder_2.torch_dtype(),
-            device_map="auto",
         )
         text_encoder_2.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
 
@@ -97,21 +95,18 @@ class StableDiffusionXLModelLoader(
             vae = AutoencoderKL.from_pretrained(
                 vae_model_name,
                 torch_dtype=weight_dtypes.vae.torch_dtype(),
-                device_map="auto",
             )
         else:
             vae = AutoencoderKL.from_pretrained(
                 base_model_name,
                 subfolder="vae",
                 torch_dtype=weight_dtypes.vae.torch_dtype(),
-                device_map="auto",
             )
 
         unet = UNet2DConditionModel.from_pretrained(
             base_model_name,
             subfolder="unet",
             torch_dtype=weight_dtypes.unet.torch_dtype(),
-            device_map="auto",
         )
 
         model.model_type = model_type
