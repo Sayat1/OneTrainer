@@ -8,12 +8,12 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     create_checkpointed_forward,
     enable_checkpointing_for_clip_encoder_layers,
     enable_checkpointing_for_transformer_blocks,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context
@@ -160,34 +160,6 @@ class BaseStableDiffusionSetup(
         )
         model.embedding_wrapper.hook_to_module()
 
-    def __encode_text(
-            self,
-            model: StableDiffusionModel,
-            config: TrainConfig,
-            text_encoder_layer_skip: int,
-            tokens: Tensor = None,
-            text: str = None,
-    ):
-        if tokens is None:
-            tokenizer_output = model.tokenizer(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens = tokenizer_output.input_ids.to(model.text_encoder.device)
-
-        # TODO: use attention mask if this is true:
-        # hasattr(text_encoder.config, "use_attention_mask") and text_encoder.config.use_attention_mask:
-        text_encoder_output = model.text_encoder(tokens, return_dict=True, output_hidden_states=True)
-        final_layer_norm = model.text_encoder.text_model.final_layer_norm
-        prompt_embeds = final_layer_norm(
-            text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-        )
-
-        return prompt_embeds
-
     def predict(
             self,
             model: StableDiffusionModel,
@@ -206,15 +178,12 @@ class BaseStableDiffusionSetup(
 
             vae_scaling_factor = model.vae.config['scaling_factor']
 
-            if config.text_encoder.train or config.train_any_embedding():
-                text_encoder_output = self.__encode_text(
-                    model,
-                    config,
-                    config.text_encoder_layer_skip,
-                    tokens=batch['tokens'],
-                )
-            else:
-                text_encoder_output = batch['text_encoder_hidden_state']
+            text_encoder_output = model.encode_text(
+                tokens=batch['tokens'],
+                text_encoder_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_output=batch[
+                    'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+            )
 
             latent_image = batch['latent_image']
             scaled_latent_image = latent_image * vae_scaling_factor
@@ -226,11 +195,9 @@ class BaseStableDiffusionSetup(
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
             if is_align_prop_step and not deterministic:
-                negative_text_encoder_output = self.__encode_text(
-                    model,
-                    config,
-                    config.text_encoder_layer_skip,
+                negative_text_encoder_output = model.encode_text(
                     text="",
+                    text_encoder_layer_skip=config.text_encoder_layer_skip,
                 ).expand((scaled_latent_image.shape[0], -1, -1))
 
                 model.noise_scheduler.set_timesteps(config.align_prop_steps)

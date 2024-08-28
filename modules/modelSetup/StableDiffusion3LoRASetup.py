@@ -40,7 +40,6 @@ class StableDiffusion3LoRASetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_1",
-                display_name="text_encoder_1",
                 parameters=model.text_encoder_1_lora.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
@@ -48,7 +47,6 @@ class StableDiffusion3LoRASetup(
         if config.text_encoder_2.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_2",
-                display_name="text_encoder_2",
                 parameters=model.text_encoder_2_lora.parameters(),
                 learning_rate=config.text_encoder_2.learning_rate,
             ))
@@ -56,49 +54,32 @@ class StableDiffusion3LoRASetup(
         if config.text_encoder_3.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_3",
-                display_name="text_encoder_3",
                 parameters=model.text_encoder_3_lora.parameters(),
                 learning_rate=config.text_encoder_3.learning_rate,
             ))
 
         if config.train_any_embedding():
             if config.text_encoder.train_embedding and model.text_encoder_1 is not None:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_1.additional_embeddings,
-                                                        model.embedding_wrapper_1.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_1.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_1/{name}",
-                        display_name=f"embeddings_1/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_1, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_1"
+                )
 
             if config.text_encoder_2.train_embedding and model.text_encoder_2 is not None:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_2.additional_embeddings,
-                                                        model.embedding_wrapper_2.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_2.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_2/{name}",
-                        display_name=f"embeddings_2/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_2, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_2"
+                )
 
             if config.text_encoder_3.train_embedding and model.text_encoder_3 is not None:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_3.additional_embeddings,
-                                                        model.embedding_wrapper_3.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_3.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_3/{name}",
-                        display_name=f"embeddings_3/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_3, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_3"
+                )
 
         if config.prior.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="transformer",
-                display_name="transformer",
                 parameters=model.transformer_lora.parameters(),
                 learning_rate=config.prior.learning_rate,
             ))
