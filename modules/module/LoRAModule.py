@@ -1,5 +1,6 @@
 import copy
 import math
+import re
 from abc import abstractmethod
 from typing import Any, Mapping, Tuple
 
@@ -444,10 +445,13 @@ class LoRAModuleWrapper:
 
         if orig_module is not None:
             for name, child_module in orig_module.named_modules():
-                if len(self.module_filter) == 0 or any([x in name for x in self.module_filter]):
+                if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
+                    print(name,end="")
+                if len(self.module_filter) == 0 or any([x in name for x in self.module_filter]) or any(re.match(x, name) for x in self.module_filter):
                     if isinstance(child_module, Linear) or \
                        isinstance(child_module, Conv2d):
                         lora_modules[name] = self.klass(self.prefix + "_" + name, child_module, *self.additional_args, **self.additional_kwargs)
+                        print("\t train")
 
         return lora_modules
 
