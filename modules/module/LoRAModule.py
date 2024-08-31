@@ -451,7 +451,9 @@ class LoRAModuleWrapper:
                     if isinstance(child_module, Linear) or \
                        isinstance(child_module, Conv2d):
                         lora_modules[name] = self.klass(self.prefix + "_" + name, child_module, *self.additional_args, **self.additional_kwargs)
-                        print("\t train")
+                        print("\t train",end="")
+                if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
+                    print("")
 
         return lora_modules
 
