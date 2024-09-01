@@ -411,14 +411,16 @@ class LoRAModuleWrapper:
             self,
             orig_module: nn.Module | None,
             prefix: str,
+            rank,
+            alpha,
             config: TrainConfig,
             module_filter: list[str] = None,
     ):
         self.orig_module = orig_module
         self.prefix = prefix
         self.peft_type = config.peft_type
-        self.rank = config.lora_rank
-        self.alpha = config.lora_alpha
+        self.rank = rank
+        self.alpha = alpha
         self.module_filter = [x.strip() for x in module_filter] if module_filter is not None else []
         weight_decompose = config.lora_decompose
         if self.peft_type == PeftType.LORA:
