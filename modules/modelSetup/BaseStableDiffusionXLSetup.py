@@ -8,12 +8,12 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     create_checkpointed_forward,
     enable_checkpointing_for_clip_encoder_layers,
-    enable_checkpointing_for_transformer_blocks,
+    enable_checkpointing_for_sdxl_transformer_blocks,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
@@ -66,11 +66,14 @@ class BaseStableDiffusionXLSetup(
                         f" correctly and a GPU is available: {e}"
                     )
 
-        if config.gradient_checkpointing:
+        if config.gradient_checkpointing.enabled():
             model.unet.enable_gradient_checkpointing()
-            enable_checkpointing_for_transformer_blocks(model.unet, self.train_device)
-            enable_checkpointing_for_clip_encoder_layers(model.text_encoder_1, self.train_device)
-            enable_checkpointing_for_clip_encoder_layers(model.text_encoder_2, self.train_device)
+            enable_checkpointing_for_sdxl_transformer_blocks(
+                model.unet, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
+            enable_checkpointing_for_clip_encoder_layers(
+                model.text_encoder_1, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
+            enable_checkpointing_for_clip_encoder_layers(
+                model.text_encoder_2, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -210,55 +213,6 @@ class BaseStableDiffusionXLSetup(
         model.embedding_wrapper_1.hook_to_module()
         model.embedding_wrapper_2.hook_to_module()
 
-    def __encode_text(
-            self,
-            model: StableDiffusionXLModel,
-            text_encoder_layer_skip: int,
-            text_encoder_2_layer_skip: int,
-            tokens_1: Tensor = None,
-            tokens_2: Tensor = None,
-            text_encoder_1_output: Tensor = None,
-            text_encoder_2_output: Tensor = None,
-            pooled_text_encoder_2_output: Tensor = None,
-            text: str = None,
-    ):
-        if tokens_1 is None and text is not None:
-            tokenizer_output = model.tokenizer_1(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens_1 = tokenizer_output.input_ids.to(model.text_encoder_1.device)
-
-        if tokens_2 is None and text is not None:
-            tokenizer_output = model.tokenizer_2(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens_2 = tokenizer_output.input_ids.to(model.text_encoder_2.device)
-
-        if text_encoder_1_output is None:
-            text_encoder_1_output = model.text_encoder_1(
-                tokens_1, output_hidden_states=True, return_dict=True
-            )
-            text_encoder_1_output = text_encoder_1_output.hidden_states[-(2 + text_encoder_layer_skip)]
-
-        if text_encoder_2_output is None or pooled_text_encoder_2_output is None:
-            text_encoder_2_output = model.text_encoder_2(
-                tokens_2, output_hidden_states=True, return_dict=True
-            )
-            pooled_text_encoder_2_output = text_encoder_2_output.text_embeds
-            text_encoder_2_output = text_encoder_2_output.hidden_states[-(2 + text_encoder_2_layer_skip)]
-
-        text_encoder_output = torch.concat([text_encoder_1_output, text_encoder_2_output], dim=-1)
-
-        return text_encoder_output, pooled_text_encoder_2_output
-
     def predict(
             self,
             model: StableDiffusionXLModel,
@@ -277,12 +231,11 @@ class BaseStableDiffusionXLSetup(
 
             vae_scaling_factor = model.vae.config['scaling_factor']
 
-            text_encoder_output, pooled_text_encoder_2_output = self.__encode_text(
-                model,
-                config.text_encoder_layer_skip,
-                config.text_encoder_2_layer_skip,
+            text_encoder_output, pooled_text_encoder_2_output = model.encode_text(
                 tokens_1=batch['tokens_1'],
                 tokens_2=batch['tokens_2'],
+                text_encoder_1_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_2_layer_skip=config.text_encoder_2_layer_skip,
                 text_encoder_1_output=batch[
                     'text_encoder_1_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
                 text_encoder_2_output=batch[
@@ -304,11 +257,10 @@ class BaseStableDiffusionXLSetup(
                 dummy = torch.zeros((1,), device=self.train_device)
                 dummy.requires_grad_(True)
 
-                negative_text_encoder_output, negative_pooled_text_encoder_2_output = self.__encode_text(
-                    model,
-                    config.text_encoder_layer_skip,
-                    config.text_encoder_2_layer_skip,
+                negative_text_encoder_output, negative_pooled_text_encoder_2_output = model.encode_text(
                     text="",
+                    text_encoder_1_layer_skip=config.text_encoder_layer_skip,
+                    text_encoder_2_layer_skip=config.text_encoder_2_layer_skip,
                 )
                 negative_text_encoder_output = negative_text_encoder_output \
                     .expand((scaled_latent_image.shape[0], -1, -1))

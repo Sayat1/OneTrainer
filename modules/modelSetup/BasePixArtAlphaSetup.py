@@ -8,12 +8,12 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     create_checkpointed_forward,
     enable_checkpointing_for_t5_encoder_layers,
-    enable_checkpointing_for_transformer_blocks,
+    enable_checkpointing_for_sdxl_transformer_blocks,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
@@ -76,11 +76,13 @@ class BasePixArtAlphaSetup(
                         f" correctly and a GPU is available: {e}"
                     )
 
-        if config.gradient_checkpointing:
+        if config.gradient_checkpointing.enabled():
             model.vae.enable_gradient_checkpointing()
-            enable_checkpointing_for_transformer_blocks(model.transformer, self.train_device)
+            enable_checkpointing_for_sdxl_transformer_blocks(
+                model.transformer, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
             if config.text_encoder.train or config.train_any_embedding():
-                enable_checkpointing_for_t5_encoder_layers(model.text_encoder, self.train_device)
+                enable_checkpointing_for_t5_encoder_layers(
+                    model.text_encoder, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -178,42 +180,6 @@ class BasePixArtAlphaSetup(
         )
         model.embedding_wrapper.hook_to_module()
 
-    def __encode_text(
-            self,
-            model: PixArtAlphaModel,
-            config: TrainConfig,
-            tokens: Tensor = None,
-            attention_mask: Tensor = None,
-            text: str = None,
-    ):
-        if tokens is None:
-            tokenizer_output = model.tokenizer(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=120,
-                return_tensors="pt",
-            )
-            tokens = tokenizer_output.input_ids.to(model.text_encoder.device)
-
-            attention_mask = tokenizer_output.attention_mask
-            attention_mask = attention_mask.to(model.text_encoder.device)
-
-        with model.text_encoder_autocast_context:
-            text_encoder_output = model.text_encoder(
-                tokens,
-                attention_mask=attention_mask,
-                output_hidden_states=True,
-                return_dict=True,
-            )
-            text_encoder_output.hidden_states = text_encoder_output.hidden_states[:-1]
-            final_layer_norm = model.text_encoder.encoder.final_layer_norm
-            prompt_embeds = final_layer_norm(
-                text_encoder_output.hidden_states[-(1 + config.text_encoder_layer_skip)]
-            )
-
-        return prompt_embeds, attention_mask
-
     def predict(
             self,
             model: PixArtAlphaModel,
@@ -232,16 +198,13 @@ class BasePixArtAlphaSetup(
 
             vae_scaling_factor = model.vae.config['scaling_factor']
 
-            if config.text_encoder.train or config.train_any_embedding():
-                text_encoder_output, text_encoder_attention_mask = self.__encode_text(
-                    model,
-                    config,
-                    tokens=batch['tokens'],
-                    attention_mask=batch['tokens_mask'],
-                )
-            else:
-                text_encoder_output = batch['text_encoder_hidden_state']
-                text_encoder_attention_mask = batch['tokens_mask']
+            text_encoder_output, text_encoder_attention_mask = model.encode_text(
+                tokens=batch['tokens'],
+                text_encoder_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_output=batch[
+                    'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+                attention_mask=batch['tokens_mask'],
+            )
 
             latent_image = batch['latent_image']
             scaled_latent_image = latent_image * vae_scaling_factor
@@ -256,10 +219,9 @@ class BasePixArtAlphaSetup(
                 dummy = torch.zeros((1,), device=self.train_device)
                 dummy.requires_grad_(True)
 
-                negative_text_encoder_output, negative_text_encoder_attention_mask = self.__encode_text(
-                    model,
-                    config,
+                negative_text_encoder_output, negative_text_encoder_attention_mask = model.encode_text(
                     text="",
+                    text_encoder_layer_skip=config.text_encoder_layer_skip,
                 )
                 negative_text_encoder_output = negative_text_encoder_output \
                     .expand((scaled_latent_image.shape[0], -1, -1))

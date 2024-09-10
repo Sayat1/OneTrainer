@@ -7,5 +7,5 @@ onnxruntime-gpu==1.18.0
 # # xformers
 # xformers==0.0.27+cu118
 
-# # optimizers
-# bitsandbytes==0.43.1 # bitsandbytes for 8-bit optimizers
+# optimizers
+#bitsandbytes==0.43.3 # bitsandbytes for 8-bit optimizers

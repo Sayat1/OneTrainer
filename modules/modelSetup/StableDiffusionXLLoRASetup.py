@@ -35,7 +35,6 @@ class StableDiffusionXLLoRASetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_1_lora",
-                display_name="text_encoder_1_lora",
                 parameters=model.text_encoder_1_lora.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
@@ -43,38 +42,26 @@ class StableDiffusionXLLoRASetup(
         if config.text_encoder_2.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_2_lora",
-                display_name="text_encoder_2_lora",
                 parameters=model.text_encoder_2_lora.parameters(),
                 learning_rate=config.text_encoder_2.learning_rate,
             ))
 
         if config.train_any_embedding():
             if config.text_encoder.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_1.additional_embeddings,
-                                                        model.embedding_wrapper_1.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_1.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_1/{name}",
-                        display_name=f"embeddings_1/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_1, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_1"
+                )
 
             if config.text_encoder_2.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_2.additional_embeddings,
-                                                        model.embedding_wrapper_2.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_2.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_2/{name}",
-                        display_name=f"embeddings_2/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_2, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_2"
+                )
 
         if config.unet.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="unet_lora",
-                display_name="unet_lora",
                 parameters=model.unet_lora.parameters(),
                 learning_rate=config.unet.learning_rate,
             ))
@@ -130,10 +117,10 @@ class StableDiffusionXLLoRASetup(
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
 
         LycorisNetwork.LORA_PREFIX = "lora_te1"
-        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
+        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank if config.lora_te_rank == -1 else config.lora_te_rank, linear_alpha=config.lora_alpha if config.lora_te_alpha == -1.0 else config.lora_te_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
 
         LycorisNetwork.LORA_PREFIX = "lora_te2"
-        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
+        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank if config.lora_te_rank == -1 else config.lora_te_rank, linear_alpha=config.lora_alpha if config.lora_te_alpha == -1.0 else config.lora_te_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
 
         LycorisNetwork.LORA_PREFIX = "lora_unet"
         model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options)

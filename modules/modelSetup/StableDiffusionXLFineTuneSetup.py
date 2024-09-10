@@ -33,7 +33,6 @@ class StableDiffusionXLFineTuneSetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_1",
-                display_name="text_encoder_1",
                 parameters=model.text_encoder_1.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
@@ -41,38 +40,26 @@ class StableDiffusionXLFineTuneSetup(
         if config.text_encoder_2.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_2",
-                display_name="text_encoder_2",
                 parameters=model.text_encoder_2.parameters(),
                 learning_rate=config.text_encoder_2.learning_rate,
             ))
 
         if config.train_any_embedding():
             if config.text_encoder.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_1.additional_embeddings,
-                                                        model.embedding_wrapper_1.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_1.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_1/{name}",
-                        display_name=f"embeddings_1/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_1, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_1"
+                )
 
             if config.text_encoder_2.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_2.additional_embeddings,
-                                                        model.embedding_wrapper_2.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_2.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_2/{name}",
-                        display_name=f"embeddings_2/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.embedding_wrapper_2, parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_2"
+                )
 
         if config.unet.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="unet",
-                display_name="unet",
                 parameters=model.unet.parameters(),
                 learning_rate=config.unet.learning_rate,
             ))
