@@ -468,11 +468,11 @@ class LoRAModuleWrapper:
                             if train_module:
                                 if len(x_splited) > 1:
                                     if len(x_splited) == 3:
-                                        module_rank = x_splited[1]
-                                        module_alpha = x_splited[2]
+                                        module_rank = int(x_splited[1])
+                                        module_alpha = float(x_splited[2])
                                     else:
-                                        module_rank = x_splited[1]
-                                        module_alpha = x_splited[1]
+                                        module_rank = int(x_splited[1])
+                                        module_alpha = float(x_splited[1])
                                 break
                     if train_module:
                         lora_modules[name] = self.klass(self.prefix + "_" + name, child_module, rank=module_rank, alpha=module_alpha, **self.additional_kwargs)
