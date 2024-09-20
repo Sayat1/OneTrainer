@@ -453,13 +453,31 @@ class LoRAModuleWrapper:
         if orig_module is not None:
             for name, child_module in orig_module.named_modules():
                 if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
+                    train_module = False
+                    module_rank = self.rank
+                    module_alpha = self.alpha
                     print(name,end="")
-                if len(self.module_filter) == 0 or any([x in name for x in self.module_filter]) or any(re.match(x, name) for x in self.module_filter):
-                    if isinstance(child_module, Linear) or \
-                       isinstance(child_module, Conv2d):
-                        lora_modules[name] = self.klass(self.prefix + "_" + name, child_module, *self.additional_args, **self.additional_kwargs)
-                        print("\t train",end="")
-                if isinstance(child_module, Linear) or isinstance(child_module, Conv2d):
+                    if len(self.module_filter) == 0:
+                        train_module = True
+                    else:
+                        for x in self.module_filter:
+                            x_splited = x.split(":")
+                            if x_splited[0] in name:
+                                train_module = True
+                            elif re.match(x_splited[0], name):
+                                train_module = True
+                            if train_module:
+                                if len(x_splited) > 1:
+                                    if len(x_splited) == 3:
+                                        module_rank = int(x_splited[1])
+                                        module_alpha = float(x_splited[2])
+                                    else:
+                                        module_rank = int(x_splited[1])
+                                        module_alpha = float(x_splited[1])
+                                break
+                    if train_module:
+                        lora_modules[name] = self.klass(self.prefix + "_" + name, child_module, rank=module_rank, alpha=module_alpha, **self.additional_kwargs)
+                        print(f"\t train \t rank: {module_rank}| alpha: {module_alpha}",end="")
                     print("")
 
         return lora_modules

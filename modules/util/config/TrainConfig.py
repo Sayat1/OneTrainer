@@ -143,7 +143,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("relative_step", None, bool, False))
         data.append(("safeguard_warmup", None, bool, False))
         data.append(("scale_parameter", None, bool, False))
-        data.append(("stochastic_rounding", True, bool, False))
+        data.append(("stochastic_rounding", None, bool, False))
         data.append(("use_bias_correction", None, bool, False))
         data.append(("use_triton", None, bool, False))
         data.append(("warmup_init", None, bool, False))
@@ -160,7 +160,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("ams_bound", None, bool, False))
         data.append(("r", None, float, True))
         data.append(("adanorm", None, bool, False))
-        data.append(("adam_debias", False, bool, False))
+        data.append(("adam_debias", None, bool, False))
 
         return TrainOptimizerConfig(data)
 
@@ -269,6 +269,7 @@ class TrainConfig(BaseConfig):
     learning_rate: float
     learning_rate_warmup_steps: int
     learning_rate_cycles: float
+    learning_rate_min: float
     epochs: int
     batch_size: int
     gradient_accumulation_steps: int
@@ -710,6 +711,7 @@ class TrainConfig(BaseConfig):
         data.append(("learning_rate", 3e-6, float, False))
         data.append(("learning_rate_warmup_steps", 200, int, False))
         data.append(("learning_rate_cycles", 1, int, False))
+        data.append(("learning_rate_min", 0.0, float, False))
         data.append(("epochs", 100, int, False))
         data.append(("batch_size", 1, int, False))
         data.append(("gradient_accumulation_steps", 1, int, False))

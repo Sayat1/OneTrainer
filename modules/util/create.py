@@ -992,6 +992,7 @@ def create_lr_scheduler(
         approximate_epoch_length: int,
         gradient_accumulation_steps: int,
         global_step: int = 0,
+        eta_min: float = 0.0,
 ) -> LRScheduler:
     steps_per_epoch = approximate_epoch_length
     total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
@@ -1013,17 +1014,18 @@ def create_lr_scheduler(
 
         case LearningRateScheduler.COSINE:
             lr_lambda = lr_lambda_cosine(
-                scheduler_steps
+                scheduler_steps,
+                eta_min
             )
 
         case LearningRateScheduler.COSINE_WITH_RESTARTS:
             lr_lambda = lr_lambda_cosine_with_restarts(
-                scheduler_steps, num_cycles
+                scheduler_steps, num_cycles, eta_min
             )
 
         case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
             lr_lambda = lr_lambda_cosine_with_hard_restarts(
-                scheduler_steps, num_cycles
+                scheduler_steps, num_cycles, eta_min
             )
         case LearningRateScheduler.REX:
             lr_lambda = lr_lambda_rex(
