@@ -150,61 +150,46 @@ class FluxModelLoader(
             include_text_encoder_1: bool,
             include_text_encoder_2: bool,
     ):
-        pipeline = FluxPipeline.from_single_file(
-            pretrained_model_link_or_path=base_model_name,
-            safety_checker=None,
+        tokenizer_1 = None
+        tokenizer_2 = None
+        text_encoder_1 = None
+        text_encoder_2 = None
+
+        noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
+            "black-forest-labs/FLUX.1-dev",
+            subfolder="scheduler",
         )
 
-        if include_text_encoder_2:
-            # replace T5TokenizerFast with T5Tokenizer, loaded from the same repository
-            pipeline.tokenizer_2 = T5Tokenizer.from_pretrained(
-                pretrained_model_name_or_path="black-forest-labs/FLUX.1-dev",
-                subfolder="tokenizer_2",
-            )
+        transformer = FluxTransformer2DModel.from_pretrained(
+            pretrained_model_name_or_path=base_model_name,
+            subfolder="transformer",
+            torch_dtype=weight_dtypes.prior.torch_dtype(),
+        )
 
         if vae_model_name:
-            pipeline.vae = AutoencoderKL.from_pretrained(
+            vae = AutoencoderKL.from_pretrained(
                 vae_model_name,
                 torch_dtype=weight_dtypes.vae.torch_dtype(),
             )
-
-        if pipeline.text_encoder is not None and include_text_encoder_1:
-            text_encoder_1 = pipeline.text_encoder.to(dtype=weight_dtypes.text_encoder.torch_dtype())
-            text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(False))
-            tokenizer_1 = pipeline.tokenizer
-
-            if weight_dtypes.text_encoder.quantize_nf4():
-                replace_linear_with_nf4_layers(text_encoder_1)
         else:
-            text_encoder_1 = None
-            tokenizer_1 = None
-            print("text encoder 1 (clip l) not loaded, continuing without it")
+            vae = AutoencoderKL.from_pretrained(
+                "black-forest-labs/FLUX.1-dev",
+                subfolder="vae",
+                torch_dtype=weight_dtypes.vae.torch_dtype(),
+            )
 
-        if pipeline.text_encoder_2 is not None and include_text_encoder_2:
-            text_encoder_2 = pipeline.text_encoder_2.to(dtype=weight_dtypes.text_encoder_2.torch_dtype())
-            text_encoder_2.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder_2.torch_dtype(
-                supports_quantization=False))
-            tokenizer_2 = pipeline.tokenizer_2
-
-            if weight_dtypes.text_encoder_2.quantize_nf4():
-                replace_linear_with_nf4_layers(text_encoder_2)
-        else:
-            text_encoder_2 = None
-            tokenizer_2 = None
-            print("text encoder 2 (t5) not loaded, continuing without it")
-
-        vae = pipeline.vae.to(dtype=weight_dtypes.vae.torch_dtype())
+        vae = vae.to(dtype=weight_dtypes.vae.torch_dtype())
         if weight_dtypes.vae.quantize_nf4():
-            replace_linear_with_nf4_layers(pipeline.vae)
+            replace_linear_with_nf4_layers(vae)
 
-        transformer = pipeline.transformer.to(dtype=weight_dtypes.prior.torch_dtype())
+        transformer = transformer.to(dtype=weight_dtypes.prior.torch_dtype())
         if weight_dtypes.prior.quantize_nf4():
-            replace_linear_with_nf4_layers(pipeline.transformer)
+            replace_linear_with_nf4_layers(transformer)
 
         model.model_type = model_type
         model.tokenizer_1 = tokenizer_1
         model.tokenizer_2 = tokenizer_2
-        model.noise_scheduler = pipeline.scheduler
+        model.noise_scheduler = noise_scheduler
         model.text_encoder_1 = text_encoder_1
         model.text_encoder_2 = text_encoder_2
         model.vae = vae
