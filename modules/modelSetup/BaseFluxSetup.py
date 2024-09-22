@@ -107,9 +107,12 @@ class BaseFluxSetup(
                 config.enable_autocast_cache,
             )
 
-        set_nf4_compute_type(model.text_encoder_1, model.train_dtype)
-        set_nf4_compute_type(model.text_encoder_2, model.text_encoder_2_train_dtype)
-        set_nf4_compute_type(model.transformer, model.train_dtype)
+        if model.text_encoder_1:
+            set_nf4_compute_type(model.text_encoder_1, model.train_dtype)
+        if model.text_encoder_2:
+            set_nf4_compute_type(model.text_encoder_2, model.text_encoder_2_train_dtype)
+        if model.transformer:
+            set_nf4_compute_type(model.transformer, model.train_dtype)
 
     def _setup_additional_embeddings(
             self,

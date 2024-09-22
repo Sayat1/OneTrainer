@@ -51,21 +51,18 @@ class FluxModelLoader(
             include_text_encoder_1: bool,
             include_text_encoder_2: bool,
     ):
-        if include_text_encoder_1:
-            tokenizer_1 = CLIPTokenizer.from_pretrained(
-                base_model_name,
-                subfolder="tokenizer",
-            )
-        else:
-            tokenizer_1 = None
+        tokenizer_1 = None
+        tokenizer_2 = None
 
-        if include_text_encoder_2:
-            tokenizer_2 = T5Tokenizer.from_pretrained(
-                base_model_name,
-                subfolder="tokenizer_2",
-            )
-        else:
-            tokenizer_2 = None
+        tokenizer_1 = CLIPTokenizer.from_pretrained(
+            base_model_name,
+            subfolder="tokenizer",
+        )
+
+        tokenizer_2 = T5Tokenizer.from_pretrained(
+            base_model_name,
+            subfolder="tokenizer_2",
+        )
 
         noise_scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
             base_model_name,
