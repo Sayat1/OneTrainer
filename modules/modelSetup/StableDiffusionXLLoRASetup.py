@@ -123,15 +123,15 @@ class StableDiffusionXLLoRASetup(
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
 
         model.text_encoder_1_lora = LoRAModuleWrapper(
-            model.text_encoder_1, "lora_te1", config.lora_rank if config.lora_te_rank == -1 else config.lora_te_rank, config.lora_alpha if config.lora_te_alpha == -1.0 else config.lora_te_alpha, config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
+            model.text_encoder_1, "lora_te1", config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
         ) if create_te1 else None
 
         model.text_encoder_2_lora = LoRAModuleWrapper(
-            model.text_encoder_2, "lora_te2", config.lora_rank if config.lora_te_rank == -1 else config.lora_te_rank, config.lora_alpha if config.lora_te_alpha == -1.0 else config.lora_te_alpha, config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
+            model.text_encoder_2, "lora_te2", config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
         ) if create_te2 else None
 
         model.unet_lora = LoRAModuleWrapper(
-            model.unet, "lora_unet", config.lora_rank, config.lora_alpha, config, config.lora_layers.split(",")
+            model.unet, "lora_unet", config, config.lora_layers.split(",")
         )
 
         if model.lora_state_dict:
