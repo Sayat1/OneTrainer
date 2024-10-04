@@ -23,7 +23,7 @@ import customtkinter as ctk
 class TrainingTab:
 
     def __init__(self, master, train_config: TrainConfig, ui_state: UIState):
-        super(TrainingTab, self).__init__()
+        super().__init__()
 
         self.master = master
         self.train_config = train_config
@@ -672,7 +672,7 @@ class TrainingTab:
 
         # log-cosh Strength
         components.label(frame, 2, 0, "log-cosh Strength",
-                         tooltip="Log - Hyperbolic cosine Error strength for custom loss settings. Should be used indepedently.")
+                         tooltip="Log - Hyperbolic cosine Error strength for custom loss settings.")
         components.entry(frame, 2, 1, self.ui_state, "log_cosh_strength")
 
         if supports_vb_loss:

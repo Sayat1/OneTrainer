@@ -21,7 +21,7 @@ class FluxModelLoader(
     HFModelLoaderMixin,
 ):
     def __init__(self):
-        super(FluxModelLoader, self).__init__()
+        super().__init__()
 
     def __load_internal(
             self,
@@ -222,7 +222,7 @@ class FluxModelLoader(
                 model_names.include_text_encoder, model_names.include_text_encoder_2,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
@@ -231,7 +231,7 @@ class FluxModelLoader(
                 model_names.include_text_encoder, model_names.include_text_encoder_2,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
@@ -240,7 +240,7 @@ class FluxModelLoader(
                 model_names.include_text_encoder, model_names.include_text_encoder_2,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         # try:
@@ -250,7 +250,7 @@ class FluxModelLoader(
         #         model_names.include_text_encoder_3,
         #     )
         #     return
-        # except:
+        # except Exception:
         #     stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

@@ -1,6 +1,6 @@
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSampler.BaseModelSampler import BaseModelSampler
@@ -22,7 +22,7 @@ class StableDiffusionVaeSampler(BaseModelSampler):
             model: StableDiffusionModel,
             model_type: ModelType,
     ):
-        super(StableDiffusionVaeSampler, self).__init__(train_device, temp_device)
+        super().__init__(train_device, temp_device)
 
         self.model = model
         self.model_type = model_type
@@ -38,8 +38,15 @@ class StableDiffusionVaeSampler(BaseModelSampler):
         # TODO: this is reusing the prompt parameters as the image path, think of a better solution
         image = Image.open(sample_config.prompt)
         image = image.convert("RGB")
+        # TODO: figure out better set of transformations for resize and/or implement way to configure them as per-sample toggle
 
-        t_in = transforms.ToTensor()
+        scale = sample_config.width if sample_config.width > sample_config.height else sample_config.height
+
+        t_in = transforms.Compose([
+            transforms.Resize(scale),
+            transforms.CenterCrop([sample_config.height, sample_config.width]),
+            transforms.ToTensor()
+        ])
         image_tensor = t_in(image).to(device=self.train_device, dtype=self.model.vae.dtype)
         image_tensor = image_tensor * 2 - 1
 
@@ -55,7 +62,9 @@ class StableDiffusionVaeSampler(BaseModelSampler):
         image_tensor = image_tensor.clamp(0, 1)
 
         t_out = transforms.ToPILImage()
-        image = t_out(image_tensor)
+        image = t_out(image_tensor.float())
 
         os.makedirs(Path(destination).parent.absolute(), exist_ok=True)
         image.save(destination)
+
+        on_sample(image)

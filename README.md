@@ -8,7 +8,7 @@ Hardware for development sponsored by https://shakker.ai
 
 ## Features
 
-- **Supported models**: Stable Diffusion 1.5, 2.0, 2.1, 3.0, SDXL, Würstchen-v2, Stable Cascade, PixArt-Alpha, 
+- **Supported models**: FLUX.1, Stable Diffusion 1.5, 2.0, 2.1, 3.0, SDXL, Würstchen-v2, Stable Cascade, PixArt-Alpha,
   PixArt-Sigma and inpainting models
 - **Model formats**: diffusers and ckpt models
 - **Training methods**: Full fine-tuning, LoRA, embeddings
@@ -95,7 +95,9 @@ All functionality is split into different scrips located in the `scripts` direct
 - `generate_masks.py` A utility to automatically create masks for your dataset
 - `calculate_loss.py` A utility to calculate the training loss of every image in your dataset
 
-To learn more about the different parameters, execute `<scipt-name> -h`. For example `python scripts\train.py -h`
+To learn more about the different parameters, execute `<script-name> -h`. For example `python scripts\train.py -h`
+
+If you are on Mac or Linux, read [the launch script documentation](LAUNCH-SCRIPTS.md) for detailed information about how to run OneTrainer and its various scripts on your system.
 
 ## Contributing
 

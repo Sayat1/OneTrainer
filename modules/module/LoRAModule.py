@@ -2,7 +2,8 @@ import copy
 import math
 import re
 from abc import abstractmethod
-from typing import Any, Mapping, Tuple
+from collections.abc import Mapping
+from typing import Any
 
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import PeftType
@@ -93,7 +94,7 @@ class PeftBase(nn.Module):
     def check_initialized(self):
         """Checks, and raises an exception, if the module is not initialized."""
         if not self._initialized:
-            raise RuntimeError("Module %s is not initialized." % self.prefix)
+            raise RuntimeError(f"Module {self.prefix} is not initialized.")
 
         # Perform assertions to make pytype happy.
         assert self.orig_forward is not None
@@ -122,7 +123,7 @@ class PeftBase(nn.Module):
     def extract_from_module(self, base_module: nn.Module):
         pass
 
-    def create_layer(self) -> Tuple[nn.Module, nn.Module]:
+    def create_layer(self) -> tuple[nn.Module, nn.Module]:
         """Generic helper function for creating a PEFT layer, like LoRA.
 
         Creates down/up layer modules for the given layer type in the
@@ -292,7 +293,7 @@ class LoRAModule(PeftBase):
     # construction, but definitely exist by the time those methods are called.
 
     def __init__(self, prefix: str, orig_module: nn.Module | None, rank: int, alpha: float):
-        super(LoRAModule, self).__init__(prefix, orig_module)
+        super().__init__(prefix, orig_module)
 
         self.rank = rank
         self.dropout = Dropout(0)
@@ -480,17 +481,17 @@ class LoRAModuleWrapper:
         return lora_modules
 
     def requires_grad_(self, requires_grad: bool):
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.requires_grad_(requires_grad)
 
     def parameters(self) -> list[Parameter]:
         parameters = []
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             parameters += module.parameters()
         return parameters
 
     def to(self, device: torch.device = None, dtype: torch.dtype = None) -> 'LoRAModuleWrapper':
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.to(device, dtype)
         return self
 
@@ -508,7 +509,7 @@ class LoRAModuleWrapper:
         for name, module in self.lora_modules.items():
             try:
                 module.load_state_dict(state_dict)
-            except RuntimeError:
+            except RuntimeError:  # noqa: PERF203
                 print(f"Missing key for {name}; initializing it to zero.")
 
         # Temporarily re-create the state dict, so we can see what keys were left.
@@ -528,7 +529,7 @@ class LoRAModuleWrapper:
         """
         state_dict = {}
 
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             state_dict |= module.state_dict(prefix=module.prefix)
 
         return state_dict
@@ -547,28 +548,28 @@ class LoRAModuleWrapper:
         """
         Hooks the LoRA into the module without changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.hook_to_module()
 
     def remove_hook_from_module(self):
         """
         Removes the LoRA hook from the module without changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.remove_hook_from_module()
 
     def apply_to_module(self):
         """
         Applys the LoRA to the module, changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.apply_to_module()
 
     def extract_from_module(self, base_module: nn.Module):
         """
         Creates a LoRA from the difference between the base_module and the orig_module
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.extract_from_module(base_module)
 
     def prune(self):

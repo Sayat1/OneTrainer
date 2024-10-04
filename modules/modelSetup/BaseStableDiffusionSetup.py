@@ -40,7 +40,7 @@ class BaseStableDiffusionSetup(
 ):
 
     def __init__(self, train_device: torch.device, temp_device: torch.device, debug_mode: bool):
-        super(BaseStableDiffusionSetup, self).__init__(train_device, temp_device, debug_mode)
+        super().__init__(train_device, temp_device, debug_mode)
 
     def _setup_optimizations(
             self,
@@ -212,7 +212,7 @@ class BaseStableDiffusionSetup(
                             1.0 - config.align_prop_truncate_steps))
                 truncate_timestep_index = config.align_prop_steps - rand.randint(timestep_low, timestep_high)
 
-                checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device)
+                checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device, self.temp_device)
 
                 for step in range(config.align_prop_steps):
                     timestep = model.noise_scheduler.timesteps[step] \
