@@ -72,12 +72,16 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
             prompt_embedding, pooled_text_encoder_2_output = self.model.encode_text(
                 text=prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_1_layer_skip=text_encoder_1_layer_skip,
                 text_encoder_2_layer_skip=text_encoder_2_layer_skip,
             )
 
             negative_prompt_embedding, negative_pooled_text_encoder_2_output = self.model.encode_text(
                 text=negative_prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_1_layer_skip=text_encoder_1_layer_skip,
                 text_encoder_2_layer_skip=text_encoder_2_layer_skip,
             )
@@ -305,12 +309,16 @@ class StableDiffusionXLSampler(BaseModelSampler):
 
         prompt_embedding, pooled_text_encoder_2_output = self.model.encode_text(
             text=prompt,
+            train_device=self.train_device,
+            batch_size=1,
             text_encoder_1_layer_skip=text_encoder_1_layer_skip,
             text_encoder_2_layer_skip=text_encoder_2_layer_skip,
         )
 
         negative_prompt_embedding, negative_pooled_text_encoder_2_output = self.model.encode_text(
             text=negative_prompt,
+            train_device=self.train_device,
+            batch_size=1,
             text_encoder_1_layer_skip=text_encoder_1_layer_skip,
             text_encoder_2_layer_skip=text_encoder_2_layer_skip,
         )
