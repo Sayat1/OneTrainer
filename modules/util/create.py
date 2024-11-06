@@ -948,6 +948,19 @@ def create_optimizer(
                 adam_debias=optimizer_config.adam_debias if optimizer_config.adam_debias is not None else False,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
             )
+        
+        case Optimizer.SOAP:
+            from pytorch_optimizer.optimizer.soap import Soap
+            optimizer = Soap(
+                params=parameters,
+                lr=config.learning_rate if config.learning_rate is not None else 0,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.95,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.95),
+                **optimizer_config.extra
+            )
+
+
 
     if state_dict is not None and optimizer is not None:
         if 'param_group_mapping' not in state_dict:
