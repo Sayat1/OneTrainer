@@ -950,8 +950,8 @@ def create_optimizer(
             )
         
         case Optimizer.SOAP:
-            from pytorch_optimizer.optimizer.soap import Soap
-            optimizer = Soap(
+            from pytorch_optimizer.optimizer.soap import SOAP
+            optimizer = SOAP(
                 params=parameters,
                 lr=config.learning_rate if config.learning_rate is not None else 0,
                 weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
