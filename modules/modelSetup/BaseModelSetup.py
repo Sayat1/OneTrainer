@@ -97,7 +97,7 @@ class BaseModelSetup(
             config: TrainConfig,
             scheduler: LRScheduler,
             tensorboard: SummaryWriter,
-    ):
+    ) -> dict[str,float]:
         lrs = scheduler.get_last_lr()
         parameters = model.parameters.display_name_mapping
 
@@ -115,6 +115,7 @@ class BaseModelSetup(
             tensorboard.add_scalar(
                 f"lr/{name}", lr, model.train_progress.global_step
             )
+        return reported_learning_rates
 
     def stop_unet_training_elapsed(
             self,

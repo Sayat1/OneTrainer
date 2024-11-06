@@ -733,7 +733,7 @@ class GenericTrainer(BaseTrainer):
                         self.model.optimizer.zero_grad(set_to_none=True)
                         has_gradient = False
 
-                        self.model_setup.report_to_tensorboard(
+                        reported_lr = self.model_setup.report_to_tensorboard(
                             self.model, self.config, lr_scheduler, self.tensorboard
                         )
 
@@ -744,6 +744,7 @@ class GenericTrainer(BaseTrainer):
                             'loss': accumulated_loss,
                             'smooth loss': ema_loss,
                         })
+                        step_tqdm.set_postfix(reported_lr)
                         self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
                         accumulated_loss = 0.0
 
