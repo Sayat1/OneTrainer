@@ -33,7 +33,7 @@ lion-pytorch==0.1.4 # lion optimizer
 prodigyopt==1.0 # prodigy optimizer
 -e git+https://github.com/Sayat1/schedule_free#egg=schedulefree
 #schedulefree==1.2.7 # schedule-free optimizers
--U pytorch_optimizer # pytorch optimizers
+pytorch_optimizer # pytorch optimizers
 
 # Profiling
 scalene==1.5.41
