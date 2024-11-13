@@ -467,15 +467,15 @@ class LoRAModuleWrapper:
                     train_module = False
                     module_rank = self.rank
                     module_alpha = self.alpha
-                    print(name,end="")
+                    print(f"{name} - {str(type(child_module))}",end="")
                     if len(self.module_filter) == 0 or (len(self.module_filter)==1 and self.module_filter[0].strip()==""):
                         train_module = True
                     else:
                         for x in self.module_filter:
                             x_splited = x.split(":")
-                            if x_splited[0] in name:
+                            if x_splited[0] in name or x_splited[0] in str(type(child_module)):
                                 train_module = True
-                            elif re.match(x_splited[0], name):
+                            elif re.match(x_splited[0], name) or re.match(x_splited[0], str(type(child_module))):
                                 train_module = True
                             if train_module:
                                 if len(x_splited) > 1:
