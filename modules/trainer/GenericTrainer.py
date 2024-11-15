@@ -724,14 +724,14 @@ class GenericTrainer(BaseTrainer):
                         elif scaler:
                             for optimizer in self.model.optimizers:
                                 scaler.unscale_(optimizer)
-                            if self.config.max_grad_norm != 0.0:
-                                nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
+                            if self.config.clip_grad_norm is not None:
+                                nn.utils.clip_grad_norm_(self.parameters, self.config.clip_grad_norm)
                             for optimizer in self.model.optimizers:
                                 scaler.step(optimizer)
                             scaler.update()
                         else:
-                            if self.config.max_grad_norm != 0.0:
-                                nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
+                            if self.config.clip_grad_norm is not None:
+                                nn.utils.clip_grad_norm_(self.parameters, self.config.clip_grad_norm)
                             [optimizer.step() for optimizer in self.model.optimizers]
 
                         lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
