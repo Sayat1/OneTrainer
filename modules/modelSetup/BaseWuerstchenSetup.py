@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from random import Random
 
 from modules.model.WuerstchenModel import WuerstchenModel, WuerstchenModelEmbedding
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
@@ -7,11 +8,11 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     enable_checkpointing_for_clip_encoder_layers,
     enable_checkpointing_for_stable_cascade_blocks,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import (
@@ -46,12 +47,12 @@ class BaseWuerstchenSetup(
             config: TrainConfig,
     ):
         if config.attention_mechanism == AttentionMechanism.DEFAULT:
-            for name, child_module in model.prior_prior.named_modules():
+            for child_module in model.prior_prior.modules():
                 if isinstance(child_module, Attention):
                     child_module.set_processor(AttnProcessor())
         elif config.attention_mechanism == AttentionMechanism.XFORMERS and is_xformers_available():
             try:
-                for name, child_module in model.prior_prior.named_modules():
+                for child_module in model.prior_prior.modules():
                     if isinstance(child_module, Attention):
                         child_module.set_processor(XFormersAttnProcessor())
             except Exception as e:
@@ -60,17 +61,17 @@ class BaseWuerstchenSetup(
                     f" correctly and a GPU is available: {e}"
                 )
         elif config.attention_mechanism == AttentionMechanism.SDP:
-            for name, child_module in model.prior_prior.named_modules():
+            for child_module in model.prior_prior.modules():
                 if isinstance(child_module, Attention):
                     child_module.set_processor(AttnProcessor2_0())
 
-        if config.gradient_checkpointing:
+        if config.gradient_checkpointing.enabled():
             if model.model_type.is_wuerstchen_v2():
                 model.prior_prior.enable_gradient_checkpointing()
-                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, self.train_device)
+                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, config)
             elif model.model_type.is_stable_cascade():
-                enable_checkpointing_for_stable_cascade_blocks(model.prior_prior, self.train_device)
-                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, self.train_device)
+                enable_checkpointing_for_stable_cascade_blocks(model.prior_prior, config)
+                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.decoder_vqgan)
@@ -216,6 +217,7 @@ class BaseWuerstchenSetup(
 
             generator = torch.Generator(device=config.train_device)
             generator.manual_seed(train_progress.global_step)
+            rand = Random(train_progress.global_step)
 
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
@@ -238,23 +240,19 @@ class BaseWuerstchenSetup(
                 self.__alpha_cumprod,
             )
 
-            if config.text_encoder.train or config.train_any_embedding():
-                text_encoder_output = model.prior_text_encoder(
-                    batch['tokens'], output_hidden_states=True, return_dict=True
-                )
-                if model.model_type.is_wuerstchen_v2():
-                    final_layer_norm = model.prior_text_encoder.text_model.final_layer_norm
-                    text_embedding = final_layer_norm(
-                        text_encoder_output.hidden_states[-(1 + config.text_encoder_layer_skip)]
-                    )
-                if model.model_type.is_stable_cascade():
-                    text_embedding = text_encoder_output.hidden_states[-(1 + config.text_encoder_layer_skip)]
-                    if model.model_type.is_stable_cascade():
-                        pooled_text_text_embedding = text_encoder_output.text_embeds.unsqueeze(1)
-            else:
-                text_embedding = batch['text_encoder_hidden_state']
-                if model.model_type.is_stable_cascade():
-                    pooled_text_text_embedding = batch['pooled_text_encoder_output'].unsqueeze(1)
+            text_embedding, pooled_text_text_embedding = model.encode_text(
+                train_device=self.train_device,
+                batch_size=batch['latent_image'].shape[0],
+                rand=rand,
+                tokens=batch['tokens'],
+                tokens_mask=batch['tokens_mask'],
+                text_encoder_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_output=batch[
+                    'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+                pooled_text_encoder_output=batch[
+                    'pooled_text_encoder_output'] if not config.train_text_encoder_or_embedding() else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
+            )
 
             latent_input = scaled_noisy_latent_image
 

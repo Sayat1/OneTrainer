@@ -1,7 +1,7 @@
 import json
 import os
 import traceback
-from typing import Callable
+from collections.abc import Callable
 
 from modules.util import path_util
 from modules.util.config.TrainConfig import TrainConfig
@@ -78,12 +78,14 @@ class TopBar:
                 ("Stable Diffusion 2.0 Inpainting", ModelType.STABLE_DIFFUSION_20_INPAINTING),
                 ("Stable Diffusion 2.1", ModelType.STABLE_DIFFUSION_21),
                 ("Stable Diffusion 3", ModelType.STABLE_DIFFUSION_3),
+                ("Stable Diffusion 3.5", ModelType.STABLE_DIFFUSION_35),
                 ("Stable Diffusion XL 1.0 Base", ModelType.STABLE_DIFFUSION_XL_10_BASE),
                 ("Stable Diffusion XL 1.0 Base Inpainting", ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING),
                 ("Wuerstchen v2", ModelType.WUERSTCHEN_2),
                 ("Stable Cascade", ModelType.STABLE_CASCADE_1),
                 ("PixArt Alpha", ModelType.PIXART_ALPHA),
                 ("PixArt Sigma", ModelType.PIXART_SIGMA),
+                ("Flux Dev", ModelType.FLUX_DEV_1),
             ],
             ui_state=self.ui_state,
             var_name="model_type",
@@ -106,7 +108,8 @@ class TopBar:
         elif self.train_config.model_type.is_stable_diffusion_3() \
                 or self.train_config.model_type.is_stable_diffusion_xl() \
                 or self.train_config.model_type.is_wuerstchen() \
-                or self.train_config.model_type.is_pixart():
+                or self.train_config.model_type.is_pixart() \
+                or self.train_config.model_type.is_flux():
             values = [
                 ("Fine Tune", TrainingMethod.FINE_TUNE),
                 ("LoRA", TrainingMethod.LORA),

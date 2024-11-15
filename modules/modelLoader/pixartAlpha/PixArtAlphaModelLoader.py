@@ -12,7 +12,7 @@ from transformers import T5EncoderModel, T5Tokenizer
 
 class PixArtAlphaModelLoader:
     def __init__(self):
-        super(PixArtAlphaModelLoader, self).__init__()
+        super().__init__()
 
     def __load_internal(
             self,
@@ -50,7 +50,7 @@ class PixArtAlphaModelLoader:
             subfolder="text_encoder",
             torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
         )
-        text_encoder.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
+        text_encoder.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_quantization=False))
 
         if vae_model_name:
             vae = AutoencoderKL.from_pretrained(
@@ -91,13 +91,13 @@ class PixArtAlphaModelLoader:
         try:
             self.__load_internal(model, model_type, weight_dtypes, base_model_name, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_diffusers(model, model_type, weight_dtypes, base_model_name, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

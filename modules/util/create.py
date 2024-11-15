@@ -2,7 +2,10 @@ import ast
 import importlib
 import inspect
 from typing import Iterable
+from collections.abc import Iterable
 
+from modules.dataLoader.BaseDataLoader import BaseDataLoader
+from modules.dataLoader.FluxBaseDataLoader import FluxBaseDataLoader
 from modules.dataLoader.PixArtAlphaBaseDataLoader import PixArtAlphaBaseDataLoader
 from modules.dataLoader.StableDiffusion3BaseDataLoader import StableDiffusion3BaseDataLoader
 from modules.dataLoader.StableDiffusionBaseDataLoader import StableDiffusionBaseDataLoader
@@ -11,6 +14,9 @@ from modules.dataLoader.StableDiffusionXLBaseDataLoader import StableDiffusionXL
 from modules.dataLoader.WuerstchenBaseDataLoader import WuerstchenBaseDataLoader
 from modules.model.BaseModel import BaseModel
 from modules.modelLoader.BaseModelLoader import BaseModelLoader
+from modules.modelLoader.FluxEmbeddingModelLoader import FluxEmbeddingModelLoader
+from modules.modelLoader.FluxFineTuneModelLoader import FluxFineTuneModelLoader
+from modules.modelLoader.FluxLoRAModelLoader import FluxLoRAModelLoader
 from modules.modelLoader.PixArtAlphaEmbeddingModelLoader import PixArtAlphaEmbeddingModelLoader
 from modules.modelLoader.PixArtAlphaFineTuneModelLoader import PixArtAlphaFineTuneModelLoader
 from modules.modelLoader.PixArtAlphaLoRAModelLoader import PixArtAlphaLoRAModelLoader
@@ -27,6 +33,7 @@ from modules.modelLoader.WuerstchenEmbeddingModelLoader import WuerstchenEmbeddi
 from modules.modelLoader.WuerstchenFineTuneModelLoader import WuerstchenFineTuneModelLoader
 from modules.modelLoader.WuerstchenLoRAModelLoader import WuerstchenLoRAModelLoader
 from modules.modelSampler import BaseModelSampler
+from modules.modelSampler.FluxSampler import FluxSampler
 from modules.modelSampler.PixArtAlphaSampler import PixArtAlphaSampler
 from modules.modelSampler.StableDiffusion3Sampler import StableDiffusion3Sampler
 from modules.modelSampler.StableDiffusionSampler import StableDiffusionSampler
@@ -34,6 +41,9 @@ from modules.modelSampler.StableDiffusionVaeSampler import StableDiffusionVaeSam
 from modules.modelSampler.StableDiffusionXLSampler import StableDiffusionXLSampler
 from modules.modelSampler.WuerstchenSampler import WuerstchenSampler
 from modules.modelSaver.BaseModelSaver import BaseModelSaver
+from modules.modelSaver.FluxEmbeddingModelSaver import FluxEmbeddingModelSaver
+from modules.modelSaver.FluxFineTuneModelSaver import FluxFineTuneModelSaver
+from modules.modelSaver.FluxLoRAModelSaver import FluxLoRAModelSaver
 from modules.modelSaver.PixArtAlphaEmbeddingModelSaver import PixArtAlphaEmbeddingModelSaver
 from modules.modelSaver.PixArtAlphaFineTuneModelSaver import PixArtAlphaFineTuneModelSaver
 from modules.modelSaver.PixArtAlphaLoRAModelSaver import PixArtAlphaLoRAModelSaver
@@ -50,6 +60,9 @@ from modules.modelSaver.WuerstchenEmbeddingModelSaver import WuerstchenEmbedding
 from modules.modelSaver.WuerstchenFineTuneModelSaver import WuerstchenFineTuneModelSaver
 from modules.modelSaver.WuerstchenLoRAModelSaver import WuerstchenLoRAModelSaver
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
+from modules.modelSetup.FluxEmbeddingSetup import FluxEmbeddingSetup
+from modules.modelSetup.FluxFineTuneSetup import FluxFineTuneSetup
+from modules.modelSetup.FluxLoRASetup import FluxLoRASetup
 from modules.modelSetup.PixArtAlphaEmbeddingSetup import PixArtAlphaEmbeddingSetup
 from modules.modelSetup.PixArtAlphaFineTuneSetup import PixArtAlphaFineTuneSetup
 from modules.modelSetup.PixArtAlphaLoRASetup import PixArtAlphaLoRASetup
@@ -74,7 +87,15 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TrainingMethod import TrainingMethod
-from modules.util.lr_scheduler_util import *
+from modules.util.lr_scheduler_util import (
+    lr_lambda_constant,
+    lr_lambda_cosine,
+    lr_lambda_cosine_with_hard_restarts,
+    lr_lambda_cosine_with_restarts,
+    lr_lambda_linear,
+    lr_lambda_rex,
+    lr_lambda_warmup,
+)
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer.adafactor_extensions import patch_adafactor
 from modules.util.optimizer.adam_extensions import patch_adam
@@ -98,7 +119,7 @@ from diffusers import (
 def create_model_loader(
         model_type: ModelType,
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
-) -> BaseModelLoader:
+) -> BaseModelLoader | None:
     match training_method:
         case TrainingMethod.FINE_TUNE:
             if model_type.is_stable_diffusion():
@@ -111,6 +132,8 @@ def create_model_loader(
                 return PixArtAlphaFineTuneModelLoader()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3FineTuneModelLoader()
+            if model_type.is_flux():
+                return FluxFineTuneModelLoader()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelLoader()
@@ -125,6 +148,8 @@ def create_model_loader(
                 return PixArtAlphaLoRAModelLoader()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3LoRAModelLoader()
+            if model_type.is_flux():
+                return FluxLoRAModelLoader()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelLoader()
@@ -136,12 +161,16 @@ def create_model_loader(
                 return PixArtAlphaEmbeddingModelLoader()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3EmbeddingModelLoader()
+            if model_type.is_flux():
+                return FluxEmbeddingModelLoader()
+
+    return None
 
 
 def create_model_saver(
         model_type: ModelType,
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
-) -> BaseModelSaver:
+) -> BaseModelSaver | None:
     match training_method:
         case TrainingMethod.FINE_TUNE:
             if model_type.is_stable_diffusion():
@@ -154,6 +183,8 @@ def create_model_saver(
                 return PixArtAlphaFineTuneModelSaver()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3FineTuneModelSaver()
+            if model_type.is_flux():
+                return FluxFineTuneModelSaver()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelSaver()
@@ -168,6 +199,8 @@ def create_model_saver(
                 return PixArtAlphaLoRAModelSaver()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3LoRAModelSaver()
+            if model_type.is_flux():
+                return FluxLoRAModelSaver()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelSaver()
@@ -179,6 +212,10 @@ def create_model_saver(
                 return PixArtAlphaEmbeddingModelSaver()
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3EmbeddingModelSaver()
+            if model_type.is_flux():
+                return FluxEmbeddingModelSaver()
+
+    return None
 
 
 def create_model_setup(
@@ -187,7 +224,7 @@ def create_model_setup(
         temp_device: torch.device,
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
         debug_mode: bool = False,
-) -> BaseModelSetup:
+) -> BaseModelSetup | None:
     match training_method:
         case TrainingMethod.FINE_TUNE:
             if model_type.is_stable_diffusion():
@@ -200,6 +237,8 @@ def create_model_setup(
                 return PixArtAlphaFineTuneSetup(train_device, temp_device, debug_mode)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3FineTuneSetup(train_device, temp_device, debug_mode)
+            if model_type.is_flux():
+                return FluxFineTuneSetup(train_device, temp_device, debug_mode)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneVaeSetup(train_device, temp_device, debug_mode)
@@ -214,6 +253,8 @@ def create_model_setup(
                 return PixArtAlphaLoRASetup(train_device, temp_device, debug_mode)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3LoRASetup(train_device, temp_device, debug_mode)
+            if model_type.is_flux():
+                return FluxLoRASetup(train_device, temp_device, debug_mode)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingSetup(train_device, temp_device, debug_mode)
@@ -225,6 +266,10 @@ def create_model_setup(
                 return PixArtAlphaEmbeddingSetup(train_device, temp_device, debug_mode)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3EmbeddingSetup(train_device, temp_device, debug_mode)
+            if model_type.is_flux():
+                return FluxEmbeddingSetup(train_device, temp_device, debug_mode)
+
+    return None
 
 
 def create_model_sampler(
@@ -246,6 +291,8 @@ def create_model_sampler(
                 return PixArtAlphaSampler(train_device, temp_device, model, model_type)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
+            if model_type.is_flux():
+                return FluxSampler(train_device, temp_device, model, model_type)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionVaeSampler(train_device, temp_device, model, model_type)
@@ -260,6 +307,8 @@ def create_model_sampler(
                 return PixArtAlphaSampler(train_device, temp_device, model, model_type)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
+            if model_type.is_flux():
+                return FluxSampler(train_device, temp_device, model, model_type)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionSampler(train_device, temp_device, model, model_type)
@@ -271,6 +320,10 @@ def create_model_sampler(
                 return PixArtAlphaSampler(train_device, temp_device, model, model_type)
             if model_type.is_stable_diffusion_3():
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
+            if model_type.is_flux():
+                return FluxSampler(train_device, temp_device, model, model_type)
+
+    return None
 
 
 def create_data_loader(
@@ -280,45 +333,60 @@ def create_data_loader(
         model_type: ModelType,
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
         config: TrainConfig = None,
-        train_progress: TrainProgress = TrainProgress(),
-):
+        train_progress: TrainProgress | None = None,
+        is_validation: bool = False
+) -> BaseDataLoader | None:
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0 and config.dataloader_threads > 1:
+        raise RuntimeError('layer offloading can not be activated if "dataloader_threads" > 1')
+
+    if train_progress is None:
+        train_progress = TrainProgress()
+
     match training_method:
         case TrainingMethod.FINE_TUNE:
             if model_type.is_stable_diffusion():
-                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_wuerstchen():
-                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_pixart():
-                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_3():
-                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+            if model_type.is_flux():
+                return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
-                return StableDiffusionFineTuneVaeDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionFineTuneVaeDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
         case TrainingMethod.LORA:
             if model_type.is_stable_diffusion():
-                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_wuerstchen():
-                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_pixart():
-                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_3():
-                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+            if model_type.is_flux():
+                return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
-                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_wuerstchen():
-                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_pixart():
-                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_3():
-                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress)
+                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+            if model_type.is_flux():
+                return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+
+    return None
 
 
 def create_optimizer(
@@ -329,6 +397,14 @@ def create_optimizer(
 ) -> torch.optim.Optimizer:
     optimizer = None
     optimizer_config = config.optimizer
+
+    if optimizer_config.optimizer is None:
+        return None
+
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0:
+        if (not optimizer_config.optimizer.supports_fused_back_pass() or not optimizer_config.fused_back_pass) \
+                and config.training_method == TrainingMethod.FINE_TUNE:
+            raise RuntimeError('layer offloading can only be used for fine tuning when using an optimizer that supports "fused_back_pass"')
 
     if parameter:
         parameters = parameter
@@ -454,6 +530,39 @@ def create_optimizer(
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
                 is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
                 **optimizer_config.extra
+            )
+
+        # AdEMAMix_8BIT Optimizer
+        case Optimizer.AdEMAMix_8BIT:
+            import bitsandbytes as bnb
+            optimizer = bnb.optim.AdEMAMix8bit(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999,
+                       optimizer_config.beta3 if optimizer_config.beta1 is not None else 0.9999,),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 5,
+                min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
+                is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
+            )
+
+        # AdEMAMix Optimizer
+        case Optimizer.AdEMAMix:
+            import bitsandbytes as bnb
+            optimizer = bnb.optim.AdEMAMix(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999,
+                       optimizer_config.beta3 if optimizer_config.beta1 is not None else 0.9999,),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 5,
+                optim_bits=optimizer_config.optim_bits if optimizer_config.optim_bits is not None else 32,
+                min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
+                is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
             )
 
         # ADAGRAD Optimizer
@@ -760,7 +869,7 @@ def create_optimizer(
 
             optimizer = Adafactor(
                 params=parameters,
-                lr=None if optimizer_config.relative_step == True else config.learning_rate,
+                lr=None if optimizer_config.relative_step is True else config.learning_rate,
                 eps=(optimizer_config.eps if optimizer_config.eps is not None else 1e-30,
                      optimizer_config.eps2 if optimizer_config.eps2 is not None else 1e-3),
                 clip_threshold=optimizer_config.clip_threshold if optimizer_config.clip_threshold is not None else 1.0,
@@ -842,6 +951,19 @@ def create_optimizer(
                 adam_debias=optimizer_config.adam_debias if optimizer_config.adam_debias is not None else False,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
             )
+        
+        case Optimizer.SOAP:
+            from pytorch_optimizer.optimizer.soap import SOAP
+            optimizer = SOAP(
+                params=parameters,
+                lr=config.learning_rate if config.learning_rate is not None else 0,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.95,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.95),
+                **optimizer_config.extra
+            )
+
+
 
     if state_dict is not None and optimizer is not None:
         if 'param_group_mapping' not in state_dict:
@@ -882,9 +1004,8 @@ def create_optimizer(
                 else:
                     # the group state was not saved, initialize with an empty group state
                     new_group = new_param_groups[new_group_index]
-                    for i, old_state_index in enumerate(new_group['params']):
-                        new_group['params'][i] = state_index
-                        state_index += 1
+                    new_group['params'][:] = range(state_index, state_index + len(new_group['params']))
+                    state_index += len(new_group['params'])
                     param_groups.append(new_group)
 
             state_dict['state'] = state
@@ -896,13 +1017,15 @@ def create_optimizer(
     arguments:dict = vars(optimizer).get("defaults",None)
     unused_keys = [arg_key for arg_key in arguments.keys() if not arg_key in init_keys]
     [arguments.pop(u_key) for u_key in unused_keys]
-    if config.use_schedulefree_wraper:
-        from schedulefree import ScheduleFreeWrapper
-        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9, weight_decay_at_y=arguments.get("weight_decay",0.0))
-        optimizer.__name__ = "ScheduleFree" + optimizer.__name__
     if config.use_mechanic:
         from mechanic_pytorch import mechanize
-        optimizer = mechanize(type(optimizer),log_func=print,log_every=optimizer_config.log_every if optimizer_config.log_every else 0)(params=parameters,**arguments)
+        optimizer = mechanize(type(optimizer))(params=parameters,**arguments)
+    if config.use_schedulefree_wrapper:
+        from schedulefree import ScheduleFreeWrapper
+        optimizer = ScheduleFreeWrapper(optimizer, momentum=0.9,warmup_steps=config.learning_rate_warmup_steps, \
+                                        weight_lr_power=optimizer_config.weight_lr_power if optimizer_config.weight_lr_power is not None else 2.0, \
+                                        weight_decay_at_y=arguments.get("weight_decay",0.0))
+        #optimizer.__name__ = "ScheduleFree" + optimizer.__name__
     print(f"using {type(optimizer).__name__} optimizer")
     print(f"final optimizer args | {arguments}")
     del arguments
@@ -938,21 +1061,29 @@ def create_lr_scheduler(
         config: TrainConfig,
         optimizer: torch.optim.Optimizer,
         learning_rate_scheduler: LearningRateScheduler,
-        warmup_steps: int,
+        warmup_steps: float,
         num_cycles: float,
         num_epochs: int,
         batch_size: int,
         approximate_epoch_length: int,
         gradient_accumulation_steps: int,
         global_step: int = 0,
+        eta_min: float = 0.0,
 ) -> LRScheduler:
     steps_per_epoch = approximate_epoch_length
     total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
-    warmup_steps = int(warmup_steps / gradient_accumulation_steps)
+
+    if warmup_steps > 1:   #values > 1 are literal step count
+        warmup_steps = int(warmup_steps / gradient_accumulation_steps)
+    elif 0 < warmup_steps <= 1:  #values between 0-1 are treated as percentage
+        warmup_steps = int(warmup_steps * total_steps)
+    else:   #catch any invalid inputs or negative values
+        warmup_steps = 0
+
     scheduler_steps = total_steps - warmup_steps
 
     # Force schedule-free algorithms to constant schedule.
-    if config.optimizer.optimizer.is_schedule_free:
+    if config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper:
         learning_rate_scheduler = LearningRateScheduler.CONSTANT
 
     match learning_rate_scheduler:
@@ -966,17 +1097,18 @@ def create_lr_scheduler(
 
         case LearningRateScheduler.COSINE:
             lr_lambda = lr_lambda_cosine(
-                scheduler_steps
+                scheduler_steps,
+                eta_min
             )
 
         case LearningRateScheduler.COSINE_WITH_RESTARTS:
             lr_lambda = lr_lambda_cosine_with_restarts(
-                scheduler_steps, num_cycles
+                scheduler_steps, num_cycles, eta_min
             )
 
         case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
             lr_lambda = lr_lambda_cosine_with_hard_restarts(
-                scheduler_steps, num_cycles
+                scheduler_steps, num_cycles, eta_min
             )
         case LearningRateScheduler.REX:
             lr_lambda = lr_lambda_rex(
@@ -1035,7 +1167,7 @@ def create_lr_scheduler(
         case _:
             lr_lambda = lr_lambda_constant()
 
-    if warmup_steps > 0 and not config.optimizer.optimizer.is_schedule_free:
+    if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
         lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
 
     return LambdaLR(

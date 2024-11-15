@@ -10,6 +10,7 @@ from modules.util.commands.TrainCommands import TrainCommands
 from modules.util.config.SampleConfig import SampleConfig
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.EMAMode import EMAMode
+from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.time_util import get_string_timestamp
 from modules.util.ui import components
 from modules.util.ui.UIState import UIState
@@ -49,8 +50,8 @@ class SampleWindow(ctk.CTkToplevel):
             self.callbacks.set_on_sample_custom(self.__update_preview)
             self.callbacks.set_on_update_sample_custom_progress(self.__update_progress)
         else:
-            self.model = self.__load_model()
-            self.model_sampler = self.__create_sampler(self.model)
+            self.model = None
+            self.model_sampler = None
 
         self.sample = SampleConfig.default_values()
         self.ui_state = UIState(self, self.sample)
@@ -99,14 +100,33 @@ class SampleWindow(ctk.CTkToplevel):
             training_method=self.initial_train_config.training_method,
         )
 
+        model_names = self.initial_train_config.model_names()
+        if self.initial_train_config.continue_last_backup:
+            last_backup_path = self.initial_train_config.get_last_backup_path()
+
+            if last_backup_path:
+                if self.initial_train_config.training_method == TrainingMethod.LORA:
+                    model_names.lora = last_backup_path
+                elif self.initial_train_config.training_method == TrainingMethod.EMBEDDING:
+                    model_names.embedding.model_name = last_backup_path
+                else:  # fine-tunes
+                    model_names.base_model = last_backup_path
+
+                print(f"Loading from backup '{last_backup_path}'...")
+            else:
+                print("No backup found, loading without backup...")
+
         model = model_loader.load(
             model_type=self.initial_train_config.model_type,
-            model_names=self.initial_train_config.model_names(),
+            model_names=model_names,
             weight_dtypes=self.initial_train_config.weight_dtypes(),
         )
         model.train_config = self.initial_train_config
 
+        model_setup.setup_optimizations(model, self.initial_train_config)
+        model_setup.setup_train_device(model, self.initial_train_config)
         model_setup.setup_model(model, self.initial_train_config)
+        model.to(torch.device(self.initial_train_config.temp_device))
 
         return model
 
@@ -138,6 +158,11 @@ class SampleWindow(ctk.CTkToplevel):
         if self.commands:
             self.commands.sample_custom(sample)
         else:
+            if self.model is None:
+                # lazy initialization
+                self.model = self.__load_model()
+                self.model_sampler = self.__create_sampler(self.model)
+
             sample.from_train_config(self.current_train_config)
 
             sample_dir = os.path.join(
@@ -152,6 +177,8 @@ class SampleWindow(ctk.CTkToplevel):
                 sample_dir,
                 f"{get_string_timestamp()}-training-sample-{progress.filename_string()}{image_format.extension()}"
             )
+
+            self.model.eval()
 
             self.model_sampler.sample(
                 sample_config=sample,

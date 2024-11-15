@@ -6,6 +6,7 @@ from modules.util.enum.AlignPropLoss import AlignPropLoss
 from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.DataType import DataType
 from modules.util.enum.EMAMode import EMAMode
+from modules.util.enum.GradientCheckpointingMethod import GradientCheckpointingMethod
 from modules.util.enum.LearningRateScaler import LearningRateScaler
 from modules.util.enum.LearningRateScheduler import LearningRateScheduler
 from modules.util.enum.LossScaler import LossScaler
@@ -22,7 +23,7 @@ import customtkinter as ctk
 class TrainingTab:
 
     def __init__(self, master, train_config: TrainConfig, ui_state: UIState):
-        super(TrainingTab, self).__init__()
+        super().__init__()
 
         self.master = master
         self.train_config = train_config
@@ -68,6 +69,8 @@ class TrainingTab:
             self.__setup_wuerstchen_ui(column_0, column_1, column_2)
         elif self.train_config.model_type.is_pixart():
             self.__setup_pixart_alpha_ui(column_0, column_1, column_2)
+        elif self.train_config.model_type.is_flux():
+            self.__setup_flux_ui(column_0, column_1, column_2)
 
     def __setup_stable_diffusion_ui(self, column_0, column_1, column_2):
         self.__create_base_frame(column_0, 0)
@@ -136,6 +139,20 @@ class TrainingTab:
         self.__create_masked_frame(column_2, 1)
         self.__create_loss_frame(column_2, 2, supports_vb_loss=True)
 
+    def __setup_flux_ui(self, column_0, column_1, column_2):
+        self.__create_base_frame(column_0, 0)
+        self.__create_text_encoder_1_frame(column_0, 1, supports_include=True)
+        self.__create_text_encoder_2_frame(column_0, 2, supports_include=True)
+        self.__create_embedding_frame(column_0, 4)
+
+        self.__create_base2_frame(column_1, 0)
+        self.__create_transformer_frame(column_1, 1)
+        self.__create_noise_frame(column_1, 2)
+
+        self.__create_align_prop_frame(column_2, 0)
+        self.__create_masked_frame(column_2, 1)
+        self.__create_loss_frame(column_2, 2)
+
     def __create_base_frame(self, master, row):
         frame = ctk.CTkFrame(master=master, corner_radius=5)
         frame.grid(row=row, column=0, padx=5, pady=5, sticky="nsew")
@@ -169,7 +186,7 @@ class TrainingTab:
 
         # learning rate warmup steps
         components.label(frame, 3, 0, "Learning Rate Warmup Steps",
-                         tooltip="The number of steps it takes to gradually increase the learning rate from 0 to the specified learning rate")
+                         tooltip="The number of steps it takes to gradually increase the learning rate from 0 to the specified learning rate. Values >1 are interpeted as a fixed number of steps, values <=1 are intepreted as a percentage of the total training steps (ex. 0.2 = 20% of the total step count)")
         components.entry(frame, 3, 1, self.ui_state, "learning_rate_warmup_steps")
 
         # learning rate cycles
@@ -197,6 +214,11 @@ class TrainingTab:
                          tooltip="Selects the type of learning rate scaling to use during training. Functionally equated as: LR * SQRT(selection)")
         components.options(frame, 8, 1, [str(x) for x in list(LearningRateScaler)], self.ui_state,
                            "learning_rate_scaler")
+
+        # clip grad norm
+        components.label(frame, 9, 0, "Clip Grad Norm",
+                         tooltip="Clips the gradient norm. Leave empty to disable gradient clipping.")
+        components.entry(frame, 9, 1, self.ui_state, "clip_grad_norm")
 
     def __create_base2_frame(self, master, row):
         frame = ctk.CTkFrame(master=master, corner_radius=5)
@@ -228,12 +250,18 @@ class TrainingTab:
         # gradient checkpointing
         components.label(frame, 4, 0, "Gradient checkpointing",
                          tooltip="Enables gradient checkpointing. This reduces memory usage, but increases training time")
-        components.switch(frame, 4, 1, self.ui_state, "gradient_checkpointing")
+        components.options(frame, 4, 1, [str(x) for x in list(GradientCheckpointingMethod)], self.ui_state,
+                           "gradient_checkpointing")
+
+        # gradient checkpointing layer offloading
+        components.label(frame, 5, 0, "Layer offload fraction",
+                         tooltip="Enables offloading of individual layers during training to reduce VRAM usage. Increases training time and uses more RAM. Only available if checkpointing is set to CPU_OFFLOADED. values between 0 and 1, 0=disabled")
+        components.entry(frame, 5, 1, self.ui_state, "layer_offload_fraction")
 
         # train dtype
-        components.label(frame, 5, 0, "Train Data Type",
+        components.label(frame, 6, 0, "Train Data Type",
                          tooltip="The mixed precision data type used for training. This can increase training speed, but reduces precision")
-        components.options_kv(frame, 5, 1, [
+        components.options_kv(frame, 6, 1, [
             ("float32", DataType.FLOAT_32),
             ("float16", DataType.FLOAT_16),
             ("bfloat16", DataType.BFLOAT_16),
@@ -241,27 +269,27 @@ class TrainingTab:
         ], self.ui_state, "train_dtype")
 
         # fallback train dtype
-        components.label(frame, 6, 0, "Fallback Train Data Type",
+        components.label(frame, 7, 0, "Fallback Train Data Type",
                          tooltip="The mixed precision data type used for training stages that don't support float16 data types. This can increase training speed, but reduces precision")
-        components.options_kv(frame, 6, 1, [
+        components.options_kv(frame, 7, 1, [
             ("float32", DataType.FLOAT_32),
             ("bfloat16", DataType.BFLOAT_16),
         ], self.ui_state, "fallback_train_dtype")
 
         # autocast cache
-        components.label(frame, 7, 0, "Autocast Cache",
+        components.label(frame, 8, 0, "Autocast Cache",
                          tooltip="Enables the autocast cache. Disabling this reduces memory usage, but increases training time")
-        components.switch(frame, 7, 1, self.ui_state, "enable_autocast_cache")
+        components.switch(frame, 8, 1, self.ui_state, "enable_autocast_cache")
 
         # resolution
-        components.label(frame, 8, 0, "Resolution",
+        components.label(frame, 9, 0, "Resolution",
                          tooltip="The resolution used for training. Optionally specify multiple resolutions separated by a comma, or a single exact resolution in the format <width>x<height>")
-        components.entry(frame, 8, 1, self.ui_state, "resolution")
+        components.entry(frame, 9, 1, self.ui_state, "resolution")
 
         # force circular padding
-        components.label(frame, 9, 0, "Force Circular Padding",
+        components.label(frame, 10, 0, "Force Circular Padding",
                          tooltip="Enables circular padding for all conv layers to better train seamless images")
-        components.switch(frame, 9, 1, self.ui_state, "force_circular_padding")
+        components.switch(frame, 10, 1, self.ui_state, "force_circular_padding")
 
     def __create_align_prop_frame(self, master, row):
         frame = ctk.CTkFrame(master=master, corner_radius=5)
@@ -313,6 +341,12 @@ class TrainingTab:
                          tooltip="Enables training the text encoder model")
         components.switch(frame, 0, 1, self.ui_state, "text_encoder.train")
 
+        # dropout
+        components.label(frame, row, 0, "Dropout Probability",
+                         tooltip="The Probability for dropping the text encoder conditioning")
+        components.entry(frame, row, 1, self.ui_state, "text_encoder.dropout_probability")
+        row += 1
+
         # train text encoder epochs
         components.label(frame, 2, 0, "Stop Training After",
                          tooltip="When to stop training the text encoder")
@@ -354,12 +388,11 @@ class TrainingTab:
         components.switch(frame, row, 1, self.ui_state, "text_encoder.train_embedding")
         row += 1
 
-        if supports_include: # TODO: enable this for all models
-            # dropout
-            components.label(frame, row, 0, "Dropout Probability",
-                             tooltip="The Probability for dropping the text encoder 1 conditioning")
-            components.entry(frame, row, 1, self.ui_state, "text_encoder.dropout_probability")
-            row += 1
+        # dropout
+        components.label(frame, row, 0, "Dropout Probability",
+                         tooltip="The Probability for dropping the text encoder 1 conditioning")
+        components.entry(frame, row, 1, self.ui_state, "text_encoder.dropout_probability")
+        row += 1
 
         # train text encoder epochs
         components.label(frame, row, 0, "Stop Training After",
@@ -405,12 +438,11 @@ class TrainingTab:
         components.switch(frame, row, 1, self.ui_state, "text_encoder_2.train_embedding")
         row += 1
 
-        if supports_include: # TODO: enable this for all models
-            # dropout
-            components.label(frame, row, 0, "Dropout Probability",
-                             tooltip="The Probability for dropping the text encoder 2 conditioning")
-            components.entry(frame, row, 1, self.ui_state, "text_encoder_2.dropout_probability")
-            row += 1
+        # dropout
+        components.label(frame, row, 0, "Dropout Probability",
+                         tooltip="The Probability for dropping the text encoder 2 conditioning")
+        components.entry(frame, row, 1, self.ui_state, "text_encoder_2.dropout_probability")
+        row += 1
 
         # train text encoder epochs
         components.label(frame, row, 0, "Stop Training After",
@@ -456,12 +488,11 @@ class TrainingTab:
         components.switch(frame, row, 1, self.ui_state, "text_encoder_3.train_embedding")
         row += 1
 
-        if supports_include: # TODO: enable this for all models
-            # dropout
-            components.label(frame, row, 0, "Dropout Probability",
-                             tooltip="The Probability for dropping the text encoder 3 conditioning")
-            components.entry(frame, row, 1, self.ui_state, "text_encoder_3.dropout_probability")
-            row += 1
+        # dropout
+        components.label(frame, row, 0, "Dropout Probability",
+                         tooltip="The Probability for dropping the text encoder 3 conditioning")
+        components.entry(frame, row, 1, self.ui_state, "text_encoder_3.dropout_probability")
+        row += 1
 
         # train text encoder epochs
         components.label(frame, row, 0, "Stop Training After",
@@ -652,26 +683,31 @@ class TrainingTab:
                          tooltip="Mean Absolute Error strength for custom loss settings. MAE + MSE Strengths generally should sum to 1.")
         components.entry(frame, 1, 1, self.ui_state, "mae_strength")
 
+        # log-cosh Strength
+        components.label(frame, 2, 0, "log-cosh Strength",
+                         tooltip="Log - Hyperbolic cosine Error strength for custom loss settings.")
+        components.entry(frame, 2, 1, self.ui_state, "log_cosh_strength")
+
         if supports_vb_loss:
             # VB Strength
-            components.label(frame, 2, 0, "VB Strength",
+            components.label(frame, 3, 0, "VB Strength",
                              tooltip="Variational lower-bound strength for custom loss settings. Should be set to 1 for variational diffusion models")
-            components.entry(frame, 2, 1, self.ui_state, "vb_loss_strength")
+            components.entry(frame, 3, 1, self.ui_state, "vb_loss_strength")
 
         # Loss Weight function
-        components.label(frame, 3, 0, "Loss Weight Function",
+        components.label(frame, 4, 0, "Loss Weight Function",
                          tooltip="Choice of loss weight function. Can help the model learn details more accurately.")
-        components.options(frame, 3, 1, [str(x) for x in list(LossWeight)], self.ui_state, "loss_weight_fn")
+        components.options(frame, 4, 1, [str(x) for x in list(LossWeight)], self.ui_state, "loss_weight_fn")
 
         # Loss weight strength
-        components.label(frame, 4, 0, "Gamma",
+        components.label(frame, 5, 0, "Gamma",
                          tooltip="Inverse strength of loss weighting. Range: 1-20, only applies to Min SNR and P2.")
-        components.entry(frame, 4, 1, self.ui_state, "loss_weight_strength")
+        components.entry(frame, 5, 1, self.ui_state, "loss_weight_strength")
 
         # Loss Scaler
-        components.label(frame, 5, 0, "Loss Scaler",
+        components.label(frame, 6, 0, "Loss Scaler",
                          tooltip="Selects the type of loss scaling to use during training. Functionally equated as: Loss * selection")
-        components.options(frame, 5, 1, [str(x) for x in list(LossScaler)], self.ui_state, "loss_scaler")
+        components.options(frame, 6, 1, [str(x) for x in list(LossScaler)], self.ui_state, "loss_scaler")
 
     def __open_optimizer_params_window(self):
         window = OptimizerParamsWindow(self.master, self.train_config, self.ui_state)

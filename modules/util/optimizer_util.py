@@ -3,6 +3,9 @@ from modules.util import create
 from modules.util.config.TrainConfig import TrainConfig, TrainOptimizerConfig
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
+from modules.util.torch_util import optimizer_to_device_
+
+import torch
 
 
 def change_optimizer(train_config: TrainConfig) -> TrainOptimizerConfig:
@@ -47,6 +50,7 @@ def update_optimizer_config(train_config: TrainConfig):
 def init_model_parameters(
         model: BaseModel,
         parameters: NamedParameterGroupCollection,
+        train_device: torch.device,
 ):
     model.parameters = parameters
 
@@ -54,6 +58,11 @@ def init_model_parameters(
     for opt_param_dict in opt_parameters:
         opt_param = [opt_param_dict]
         model.optimizers.append(create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config, opt_param))
+
+    if len(model.optimizers)>1:
+        for optimizer in model.optimizers:
+            optimizer_to_device_(optimizer, train_device)
+
     model.optimizer_state_dict = None
 
     model.ema = create.create_ema(parameters.parameters(), model.ema_state_dict, model.train_config)
@@ -120,6 +129,27 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "min_8bit_size": 4096,
         "percentile_clipping": 100,
         "block_wise": True,
+        "is_paged": False,
+    },
+    Optimizer.AdEMAMix_8BIT: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "min_8bit_size": 4096,
+        "is_paged": False,
+    },
+    Optimizer.AdEMAMix: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "optim_bits": 32,
+        "min_8bit_size": 4096,
         "is_paged": False,
     },
     Optimizer.LAMB: {

@@ -25,7 +25,7 @@ class PixArtAlphaLoRASetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(PixArtAlphaLoRASetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -41,26 +41,18 @@ class PixArtAlphaLoRASetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_lora",
-                display_name="text_encoder_lora",
                 parameters=model.text_encoder_lora.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
 
         if config.train_any_embedding():
-            for parameter, placeholder, name in zip(model.embedding_wrapper.additional_embeddings,
-                                                    model.embedding_wrapper.additional_embedding_placeholders,
-                                                    model.embedding_wrapper.additional_embedding_names):
-                parameter_group_collection.add_group(NamedParameterGroup(
-                    unique_name=f"embeddings/{name}",
-                    display_name=f"embeddings/{placeholder}",
-                    parameters=[parameter],
-                    learning_rate=config.embedding_learning_rate,
-                ))
+            self._add_embedding_param_groups(
+                model.embedding_wrapper, parameter_group_collection, config.embedding_learning_rate, "embeddings"
+            )
 
         if config.prior.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="transformer_lora",
-                display_name="transformer_lora",
                 parameters=model.transformer_lora.parameters(),
                 learning_rate=config.prior.learning_rate,
             ))
@@ -131,9 +123,7 @@ class PixArtAlphaLoRASetup(
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self.setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,

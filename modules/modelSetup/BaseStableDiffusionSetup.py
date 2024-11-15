@@ -8,12 +8,12 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
-    create_checkpointed_forward,
-    enable_checkpointing_for_clip_encoder_layers,
-    enable_checkpointing_for_transformer_blocks,
-)
 from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
+    create_checkpointed_forward,
+    enable_checkpointing_for_basic_transformer_blocks,
+    enable_checkpointing_for_clip_encoder_layers,
+)
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context
@@ -40,9 +40,9 @@ class BaseStableDiffusionSetup(
 ):
 
     def __init__(self, train_device: torch.device, temp_device: torch.device, debug_mode: bool):
-        super(BaseStableDiffusionSetup, self).__init__(train_device, temp_device, debug_mode)
+        super().__init__(train_device, temp_device, debug_mode)
 
-    def _setup_optimizations(
+    def setup_optimizations(
             self,
             model: StableDiffusionModel,
             config: TrainConfig,
@@ -70,11 +70,11 @@ class BaseStableDiffusionSetup(
                         f" correctly and a GPU is available: {e}"
                     )
 
-        if config.gradient_checkpointing:
+        if config.gradient_checkpointing.enabled():
             model.vae.enable_gradient_checkpointing()
             model.unet.enable_gradient_checkpointing()
-            enable_checkpointing_for_transformer_blocks(model.unet, self.train_device)
-            enable_checkpointing_for_clip_encoder_layers(model.text_encoder, self.train_device)
+            enable_checkpointing_for_basic_transformer_blocks(model.unet, config, offload_enabled=False)
+            enable_checkpointing_for_clip_encoder_layers(model.text_encoder, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -160,34 +160,6 @@ class BaseStableDiffusionSetup(
         )
         model.embedding_wrapper.hook_to_module()
 
-    def __encode_text(
-            self,
-            model: StableDiffusionModel,
-            config: TrainConfig,
-            text_encoder_layer_skip: int,
-            tokens: Tensor = None,
-            text: str = None,
-    ):
-        if tokens is None:
-            tokenizer_output = model.tokenizer(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens = tokenizer_output.input_ids.to(model.text_encoder.device)
-
-        # TODO: use attention mask if this is true:
-        # hasattr(text_encoder.config, "use_attention_mask") and text_encoder.config.use_attention_mask:
-        text_encoder_output = model.text_encoder(tokens, return_dict=True, output_hidden_states=True)
-        final_layer_norm = model.text_encoder.text_model.final_layer_norm
-        prompt_embeds = final_layer_norm(
-            text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-        )
-
-        return prompt_embeds
-
     def predict(
             self,
             model: StableDiffusionModel,
@@ -206,15 +178,16 @@ class BaseStableDiffusionSetup(
 
             vae_scaling_factor = model.vae.config['scaling_factor']
 
-            if config.text_encoder.train or config.train_any_embedding():
-                text_encoder_output = self.__encode_text(
-                    model,
-                    config,
-                    config.text_encoder_layer_skip,
-                    tokens=batch['tokens'],
-                )
-            else:
-                text_encoder_output = batch['text_encoder_hidden_state']
+            text_encoder_output = model.encode_text(
+                train_device=self.train_device,
+                batch_size=batch['latent_image'].shape[0],
+                rand=rand,
+                tokens=batch['tokens'],
+                text_encoder_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_output=batch[
+                    'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
+            )
 
             latent_image = batch['latent_image']
             scaled_latent_image = latent_image * vae_scaling_factor
@@ -226,11 +199,12 @@ class BaseStableDiffusionSetup(
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
             if is_align_prop_step and not deterministic:
-                negative_text_encoder_output = self.__encode_text(
-                    model,
-                    config,
-                    config.text_encoder_layer_skip,
+                negative_text_encoder_output = model.encode_text(
+                    train_device=self.train_device,
+                    batch_size=batch['latent_image'].shape[0],
+                    rand=rand,
                     text="",
+                    text_encoder_layer_skip=config.text_encoder_layer_skip,
                 ).expand((scaled_latent_image.shape[0], -1, -1))
 
                 model.noise_scheduler.set_timesteps(config.align_prop_steps)
@@ -243,7 +217,7 @@ class BaseStableDiffusionSetup(
                             1.0 - config.align_prop_truncate_steps))
                 truncate_timestep_index = config.align_prop_steps - rand.randint(timestep_low, timestep_high)
 
-                checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device)
+                checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device, self.temp_device)
 
                 for step in range(config.align_prop_steps):
                     timestep = model.noise_scheduler.timesteps[step] \
@@ -266,16 +240,16 @@ class BaseStableDiffusionSetup(
                         ).sample
 
                         negative_predicted_latent_noise = checkpointed_unet(
-                            latent_input,
+                            latent_input.to(dtype=model.train_dtype.torch_dtype()),
                             timestep,
-                            negative_text_encoder_output,
+                            negative_text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                             batch['latent_depth'],
                         ).sample
                     else:
                         predicted_latent_noise = checkpointed_unet(
-                            latent_input,
+                            latent_input.to(dtype=model.train_dtype.torch_dtype()),
                             timestep,
-                            text_encoder_output,
+                            text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                         ).sample
 
                         negative_predicted_latent_noise = checkpointed_unet(
@@ -348,11 +322,16 @@ class BaseStableDiffusionSetup(
 
                 if config.model_type.has_depth_input():
                     predicted_latent_noise = model.unet(
-                        latent_input, timestep, text_encoder_output, batch['latent_depth']
+                        latent_input.to(dtype=model.train_dtype.torch_dtype()),
+                        timestep,
+                        text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
+                        batch['latent_depth'].to(dtype=model.train_dtype.torch_dtype()),
                     ).sample
                 else:
                     predicted_latent_noise = model.unet(
-                        latent_input, timestep, text_encoder_output
+                        latent_input.to(dtype=model.train_dtype.torch_dtype()),
+                        timestep,
+                        text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                     ).sample
 
                 model_output_data = {}

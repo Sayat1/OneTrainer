@@ -2,6 +2,7 @@ import os
 import traceback
 
 from modules.model.StableDiffusion3Model import StableDiffusion3Model
+from modules.modelLoader.mixin.HFModelLoaderMixin import HFModelLoaderMixin
 from modules.util.enum.ModelType import ModelType
 from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
@@ -10,9 +11,11 @@ from diffusers import AutoencoderKL, FlowMatchEulerDiscreteScheduler, SD3Transfo
 from transformers import CLIPTextModelWithProjection, CLIPTokenizer, T5EncoderModel, T5Tokenizer
 
 
-class StableDiffusion3ModelLoader:
+class StableDiffusion3ModelLoader(
+    HFModelLoaderMixin,
+):
     def __init__(self):
-        super(StableDiffusion3ModelLoader, self).__init__()
+        super().__init__()
 
     def __load_internal(
             self,
@@ -72,11 +75,6 @@ class StableDiffusion3ModelLoader:
             base_model_name,
             subfolder="scheduler",
         )
-        # TODO: maybe use the loaded scheduler to create another scheduler for training
-        # noise_scheduler = create.create_noise_scheduler(
-        #     noise_scheduler=NoiseScheduler.DDIM,
-        #     original_noise_scheduler=noise_scheduler,
-        # )
 
         if include_text_encoder_1:
             text_encoder_1 = CLIPTextModelWithProjection.from_pretrained(
@@ -84,7 +82,8 @@ class StableDiffusion3ModelLoader:
                 subfolder="text_encoder",
                 torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
             )
-            text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
+            text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(
+                supports_quantization=False))
         else:
             text_encoder_1 = None
 
@@ -94,17 +93,20 @@ class StableDiffusion3ModelLoader:
                 subfolder="text_encoder_2",
                 torch_dtype=weight_dtypes.text_encoder_2.torch_dtype(),
             )
-            text_encoder_2.text_model.embeddings.to(dtype=weight_dtypes.text_encoder_2.torch_dtype(supports_fp8=False))
+            text_encoder_2.text_model.embeddings.to(dtype=weight_dtypes.text_encoder_2.torch_dtype(
+                supports_quantization=False))
         else:
             text_encoder_2 = None
 
         if include_text_encoder_3:
-            text_encoder_3 = T5EncoderModel.from_pretrained(
+            text_encoder_3 = self._load_transformers_sub_module(
+                T5EncoderModel,
+                weight_dtypes.text_encoder_3,
                 base_model_name,
-                subfolder="text_encoder_3",
-                torch_dtype=weight_dtypes.text_encoder_3.torch_dtype(),
+                "text_encoder_3",
             )
-            text_encoder_3.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder_3.torch_dtype(supports_fp8=False))
+            text_encoder_3.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder_3.torch_dtype(
+                supports_quantization=False))
         else:
             text_encoder_3 = None
 
@@ -120,10 +122,11 @@ class StableDiffusion3ModelLoader:
                 torch_dtype=weight_dtypes.vae.torch_dtype(),
             )
 
-        transformer = SD3Transformer2DModel.from_pretrained(
+        transformer = self._load_diffusers_sub_module(
+            SD3Transformer2DModel,
+            weight_dtypes.prior,
             base_model_name,
-            subfolder="transformer",
-            torch_dtype=weight_dtypes.prior.torch_dtype(),
+            "transformer",
         )
 
         model.model_type = model_type
@@ -200,7 +203,8 @@ class StableDiffusion3ModelLoader:
 
         if pipeline.text_encoder_3 is not None and include_text_encoder_3:
             text_encoder_3 = pipeline.text_encoder_3.to(dtype=weight_dtypes.text_encoder_3.torch_dtype())
-            text_encoder_3.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder_3.torch_dtype(supports_fp8=False))
+            text_encoder_3.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder_3.torch_dtype(
+                supports_quantization=False))
             tokenizer_3 = pipeline.tokenizer_3
         else:
             text_encoder_3 = None
@@ -237,7 +241,7 @@ class StableDiffusion3ModelLoader:
                 model_names.include_text_encoder_3,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
@@ -247,7 +251,7 @@ class StableDiffusion3ModelLoader:
                 model_names.include_text_encoder_3,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
@@ -257,7 +261,7 @@ class StableDiffusion3ModelLoader:
                 model_names.include_text_encoder_3,
             )
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         # try:
@@ -267,7 +271,7 @@ class StableDiffusion3ModelLoader:
         #         model_names.include_text_encoder_3,
         #     )
         #     return
-        # except:
+        # except Exception:
         #     stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

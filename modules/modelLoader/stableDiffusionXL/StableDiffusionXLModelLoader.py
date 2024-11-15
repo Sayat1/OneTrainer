@@ -23,7 +23,7 @@ class StableDiffusionXLModelLoader(
     SDConfigModelLoaderMixin,
 ):
     def __init__(self):
-        super(StableDiffusionXLModelLoader, self).__init__()
+        super().__init__()
 
     def _default_sd_config_name(
             self,
@@ -82,14 +82,16 @@ class StableDiffusionXLModelLoader(
             subfolder="text_encoder",
             torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
         )
-        text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
+        text_encoder_1.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(
+            supports_quantization=False))
 
         text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
             base_model_name,
             subfolder="text_encoder_2",
             torch_dtype=weight_dtypes.text_encoder_2.torch_dtype(),
         )
-        text_encoder_2.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
+        text_encoder_2.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(
+            supports_quantization=False))
 
         if vae_model_name:
             vae = AutoencoderKL.from_pretrained(
@@ -224,25 +226,25 @@ class StableDiffusionXLModelLoader(
         try:
             self.__load_internal(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_diffusers(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_safetensors(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_ckpt(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

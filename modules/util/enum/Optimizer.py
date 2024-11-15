@@ -18,6 +18,9 @@ class Optimizer(Enum):
     ADAMW = 'ADAMW'
     ADAMW_8BIT = 'ADAMW_8BIT'
 
+    AdEMAMix = 'AdEMAMix'
+    AdEMAMix_8BIT = "AdEMAMix_8BIT"
+
     LAMB = 'LAMB'
     LAMB_8BIT = 'LAMB_8BIT'
 
@@ -58,6 +61,7 @@ class Optimizer(Enum):
     ADABELIEF = 'ADABELIEF'
     TIGER = 'TIGER'
     AIDA = 'AIDA'
+    SOAP = 'SOAP'
 
     @property
     def is_adaptive(self):
@@ -72,7 +76,6 @@ class Optimizer(Enum):
 
     @property
     def is_schedule_free(self):
-        self.
         return self in [
             self.SCHEDULE_FREE_ADAMW,
             self.SCHEDULE_FREE_SGD,

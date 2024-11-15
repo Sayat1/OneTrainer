@@ -8,13 +8,13 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupFlowMatchingMixin import ModelSetupFlowMatchingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
-    create_checkpointed_forward,
+from modules.modelSetup.stableDiffusion3.XFormersJointAttnProcessor import XFormersJointAttnProcessor
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     enable_checkpointing_for_clip_encoder_layers,
     enable_checkpointing_for_stable_diffusion_3_transformer,
     enable_checkpointing_for_t5_encoder_layers,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
@@ -39,18 +39,16 @@ class BaseStableDiffusion3Setup(
     metaclass=ABCMeta
 ):
 
-    def _setup_optimizations(
+    def setup_optimizations(
             self,
             model: StableDiffusion3Model,
             config: TrainConfig,
     ):
         if config.attention_mechanism == AttentionMechanism.DEFAULT:
-            pass
-            # model.transformer.set_attn_processor(AttnProcessor())
+            model.transformer.set_attn_processor(JointAttnProcessor2_0())
         elif config.attention_mechanism == AttentionMechanism.XFORMERS and is_xformers_available():
             try:
-                # TODO: there is no xformers attention processor like JointAttnProcessor2_0 yet
-                # model.transformer.set_attn_processor(XFormersAttnProcessor())
+                model.transformer.set_attn_processor(XFormersJointAttnProcessor(model.train_dtype.torch_dtype()))
                 model.vae.enable_xformers_memory_efficient_attention()
             except Exception as e:
                 print(
@@ -69,14 +67,16 @@ class BaseStableDiffusion3Setup(
                         f" correctly and a GPU is available: {e}"
                     )
 
-        if config.gradient_checkpointing:
-            enable_checkpointing_for_stable_diffusion_3_transformer(model.transformer, self.train_device)
+        if config.gradient_checkpointing.enabled():
+            model.transformer_offload_conductor = \
+                enable_checkpointing_for_stable_diffusion_3_transformer(model.transformer, config)
             if model.text_encoder_1 is not None:
-                enable_checkpointing_for_clip_encoder_layers(model.text_encoder_1, self.train_device)
+                enable_checkpointing_for_clip_encoder_layers(model.text_encoder_1, config)
             if model.text_encoder_2 is not None:
-                enable_checkpointing_for_clip_encoder_layers(model.text_encoder_2, self.train_device)
-            if model.text_encoder_3 is not None and config.train_text_encoder_3_or_embedding():
-                enable_checkpointing_for_t5_encoder_layers(model.text_encoder_3, self.train_device)
+                enable_checkpointing_for_clip_encoder_layers(model.text_encoder_2, config)
+            if model.text_encoder_3 is not None:
+                model.text_encoder_3_offload_conductor = \
+                    enable_checkpointing_for_t5_encoder_layers(model.text_encoder_3, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -300,163 +300,6 @@ class BaseStableDiffusion3Setup(
         if model.embedding_wrapper_3 is not None:
             model.embedding_wrapper_3.hook_to_module()
 
-    def __encode_text(
-            self,
-            model: StableDiffusion3Model,
-            text_encoder_layer_skip: int,
-            text_encoder_2_layer_skip: int,
-            batch_size: int,
-            rand: Random,
-            config: TrainConfig,
-            tokens_1: Tensor = None,
-            tokens_2: Tensor = None,
-            tokens_3: Tensor = None,
-            tokens_mask_1: Tensor = None,
-            tokens_mask_2: Tensor = None,
-            tokens_mask_3: Tensor = None,
-            text_encoder_1_output: Tensor = None,
-            pooled_text_encoder_1_output: Tensor = None,
-            text_encoder_2_output: Tensor = None,
-            pooled_text_encoder_2_output: Tensor = None,
-            text_encoder_3_output: Tensor = None,
-            text: str = None,
-    ):
-        # tokenize prompt
-        if tokens_1 is None and text is not None and model.tokenizer_1 is not None:
-            tokenizer_output = model.tokenizer_1(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens_1 = tokenizer_output.input_ids.to(model.text_encoder_1.device)
-
-        if tokens_2 is None and text is not None and model.tokenizer_2 is not None:
-            tokenizer_output = model.tokenizer_2(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens_2 = tokenizer_output.input_ids.to(model.text_encoder_2.device)
-
-        if tokens_3 is None and text is not None and model.tokenizer_3 is not None:
-            tokenizer_output = model.tokenizer_3(
-                text,
-                padding='max_length',
-                truncation=True,
-                max_length=77,
-                return_tensors="pt",
-            )
-            tokens_3 = tokenizer_output.input_ids.to(model.text_encoder_3.device)
-
-        # encode prompt if it's not already encoded and the text encoders exist, otherwise pad with zeros
-        if (text_encoder_1_output is None or pooled_text_encoder_1_output is None) \
-                and model.text_encoder_1 is not None:
-            text_encoder_1_output = model.text_encoder_1(
-                tokens_1, output_hidden_states=True, return_dict=True
-            )
-            pooled_text_encoder_1_output = text_encoder_1_output.text_embeds
-            text_encoder_1_output = text_encoder_1_output.hidden_states[-(2 + text_encoder_layer_skip)]
-        if text_encoder_1_output is None or pooled_text_encoder_1_output is None:
-            pooled_text_encoder_1_output = torch.zeros(
-                size=(batch_size, 768),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-            text_encoder_1_output = torch.zeros(
-                size=(batch_size, 77, 768),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-            tokens_mask_1 = torch.zeros(
-                size=(batch_size, 1),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-
-        if (text_encoder_2_output is None or pooled_text_encoder_2_output is None) \
-                and model.text_encoder_2 is not None:
-            text_encoder_2_output = model.text_encoder_2(
-                tokens_2, output_hidden_states=True, return_dict=True
-            )
-            pooled_text_encoder_2_output = text_encoder_2_output.text_embeds
-            text_encoder_2_output = text_encoder_2_output.hidden_states[-(2 + text_encoder_2_layer_skip)]
-        if text_encoder_2_output is None or pooled_text_encoder_2_output is None:
-            pooled_text_encoder_2_output = torch.zeros(
-                size=(batch_size, 1280),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-            text_encoder_2_output = torch.zeros(
-                size=(batch_size, 77, 1280),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-            tokens_mask_2 = torch.zeros(
-                size=(batch_size, 1),
-                device=self.train_device,
-                dtype=model.train_dtype.torch_dtype(),
-            )
-
-        with model.text_encoder_3_autocast_context:
-            if text_encoder_3_output is None \
-                    and model.text_encoder_3 is not None:
-                text_encoder_3_output = model.text_encoder_3(
-                    tokens_3, output_hidden_states=True, return_dict=True
-                )
-                text_encoder_3_output = text_encoder_3_output.last_hidden_state
-            if text_encoder_3_output is None:
-                text_encoder_3_output = torch.zeros(
-                    size=(batch_size, 77, model.transformer.config.joint_attention_dim),
-                    device=self.train_device,
-                    dtype=model.train_dtype.torch_dtype(),
-                )
-                tokens_mask_3 = torch.zeros(
-                    size=(batch_size, 1),
-                    device=self.train_device,
-                    dtype=model.train_dtype.torch_dtype(),
-                )
-
-        # apply dropout
-        dropout_text_encoder_1_mask = (torch.tensor(
-            [rand.random() > config.text_encoder.dropout_probability for _ in range(batch_size)],
-            device=self.train_device)).float()
-        dropout_text_encoder_2_mask = (torch.tensor(
-            [rand.random() > config.text_encoder_2.dropout_probability for _ in range(batch_size)],
-            device=self.train_device)).float()
-        dropout_text_encoder_3_mask = (torch.tensor(
-            [rand.random() > config.text_encoder_3.dropout_probability for _ in range(batch_size)],
-            device=self.train_device)).float()
-
-        text_encoder_1_output = text_encoder_1_output * dropout_text_encoder_1_mask[:, None, None]
-        text_encoder_2_output = text_encoder_2_output * dropout_text_encoder_2_mask[:, None, None]
-        text_encoder_3_output = text_encoder_3_output * dropout_text_encoder_3_mask[:, None, None]
-
-        if config.prior.attention_mask:
-            text_encoder_1_output *= tokens_mask_1[:, :, None]
-            text_encoder_2_output *= tokens_mask_2[:, :, None]
-            text_encoder_3_output *= tokens_mask_3[:, :, None]
-
-        pooled_text_encoder_1_output = pooled_text_encoder_1_output * dropout_text_encoder_1_mask[:, None]
-        pooled_text_encoder_2_output = pooled_text_encoder_2_output * dropout_text_encoder_2_mask[:, None]
-
-        # build the conditioning tensor
-        prompt_embedding = torch.concat(
-            [text_encoder_1_output, text_encoder_2_output], dim=-1
-        )
-        prompt_embedding = torch.nn.functional.pad(
-            prompt_embedding, (0, text_encoder_3_output.shape[-1] - prompt_embedding.shape[-1])
-        )
-        prompt_embedding = torch.cat([prompt_embedding, text_encoder_3_output], dim=-2) \
-            .to(dtype=model.train_dtype.torch_dtype())
-        pooled_prompt_embedding = torch.cat([pooled_text_encoder_1_output, pooled_text_encoder_2_output], dim=-1) \
-            .to(dtype=model.train_dtype.torch_dtype())
-
-        return prompt_embedding, pooled_prompt_embedding
-
     def predict(
             self,
             model: StableDiffusion3Model,
@@ -476,19 +319,19 @@ class BaseStableDiffusion3Setup(
             vae_scaling_factor = model.vae.config['scaling_factor']
             vae_shift_factor = model.vae.config['shift_factor']
 
-            text_encoder_output, pooled_text_encoder_output = self.__encode_text(
-                model,
-                config.text_encoder_layer_skip,
-                config.text_encoder_2_layer_skip,
+            text_encoder_output, pooled_text_encoder_output = model.encode_text(
+                train_device=self.train_device,
                 batch_size=batch['latent_image'].shape[0],
                 rand=rand,
-                config=config,
-                tokens_1=batch['tokens_1'] if 'tokens_1' in batch else None,
-                tokens_2=batch['tokens_2'] if 'tokens_2' in batch else None,
-                tokens_3=batch['tokens_3'] if 'tokens_3' in batch else None,
-                tokens_mask_1=batch['tokens_mask_1'] if 'tokens_mask_1' in batch else None,
-                tokens_mask_2=batch['tokens_mask_2'] if 'tokens_mask_2' in batch else None,
-                tokens_mask_3=batch['tokens_mask_3'] if 'tokens_mask_3' in batch else None,
+                tokens_1=batch.get("tokens_1"),
+                tokens_2=batch.get("tokens_2"),
+                tokens_3=batch.get("tokens_3"),
+                tokens_mask_1=batch.get("tokens_mask_1"),
+                tokens_mask_2=batch.get("tokens_mask_2"),
+                tokens_mask_3=batch.get("tokens_mask_3"),
+                text_encoder_1_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_2_layer_skip=config.text_encoder_2_layer_skip,
+                text_encoder_3_layer_skip=config.text_encoder_3_layer_skip,
                 text_encoder_1_output=batch['text_encoder_1_hidden_state'] \
                     if 'text_encoder_1_hidden_state' in batch and not config.train_text_encoder_or_embedding() else None,
                 pooled_text_encoder_1_output=batch['text_encoder_1_pooled_state'] \
@@ -499,6 +342,10 @@ class BaseStableDiffusion3Setup(
                     if 'text_encoder_2_pooled_state' in batch and not config.train_text_encoder_2_or_embedding() else None,
                 text_encoder_3_output=batch['text_encoder_3_hidden_state'] \
                     if 'text_encoder_3_hidden_state' in batch and not config.train_text_encoder_3_or_embedding() else None,
+                text_encoder_1_dropout_probability=config.text_encoder.dropout_probability,
+                text_encoder_2_dropout_probability=config.text_encoder_2.dropout_probability,
+                text_encoder_3_dropout_probability=config.text_encoder_3.dropout_probability,
+                apply_attention_mask=config.prior.attention_mask,
             )
 
             latent_image = batch['latent_image']
@@ -512,161 +359,166 @@ class BaseStableDiffusion3Setup(
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
             if is_align_prop_step and not deterministic:
-                dummy = torch.zeros((1,), device=self.train_device)
-                dummy.requires_grad_(True)
+                raise NotImplementedError
+                # dummy = torch.zeros((1,), device=self.train_device)
+                # dummy.requires_grad_(True)
 
-                negative_text_encoder_output, negative_pooled_text_encoder_2_output = self.__encode_text(
-                    model,
-                    config.text_encoder_layer_skip,
-                    config.text_encoder_2_layer_skip,
-                    text="",
+                # negative_text_encoder_output, negative_pooled_text_encoder_2_output = model.encode_text(
+                #     train_device=self.train_device,
+                #     batch_size=batch['latent_image'].shape[0],
+                #     rand=rand,
+                #     text="",
+                #     text_encoder_1_layer_skip=config.text_encoder_layer_skip,
+                #     text_encoder_2_layer_skip=config.text_encoder_2_layer_skip,
+                #     text_encoder_3_layer_skip=config.text_encoder_3_layer_skip,
+                #     apply_attention_mask=config.prior.attention_mask,
+                # )
+                # negative_text_encoder_output = negative_text_encoder_output \
+                #     .expand((scaled_latent_image.shape[0], -1, -1))
+                # negative_pooled_text_encoder_2_output = negative_pooled_text_encoder_2_output \
+                #     .expand((scaled_latent_image.shape[0], -1))
+
+                # model.noise_scheduler.set_timesteps(config.align_prop_steps)
+
+                # scaled_noisy_latent_image = latent_noise
+
+                # timestep_high = int(config.align_prop_steps * config.max_noising_strength)
+                # timestep_low = \
+                #     int(config.align_prop_steps * config.max_noising_strength * (
+                #             1.0 - config.align_prop_truncate_steps))
+
+                # truncate_timestep_index = config.align_prop_steps - rand.randint(timestep_low, timestep_high)
+
+                # # original size of the image
+                # original_height = scaled_noisy_latent_image.shape[2] * 8
+                # original_width = scaled_noisy_latent_image.shape[3] * 8
+                # crops_coords_top = 0
+                # crops_coords_left = 0
+                # target_height = scaled_noisy_latent_image.shape[2] * 8
+                # target_width = scaled_noisy_latent_image.shape[3] * 8
+
+                # add_time_ids = torch.tensor([
+                #     original_height,
+                #     original_width,
+                #     crops_coords_top,
+                #     crops_coords_left,
+                #     target_height,
+                #     target_width
+                # ]).unsqueeze(0).expand((scaled_latent_image.shape[0], -1))
+
+                # add_time_ids = add_time_ids.to(
+                #     dtype=scaled_noisy_latent_image.dtype,
+                #     device=scaled_noisy_latent_image.device,
+                # )
+
+                # added_cond_kwargs = {"text_embeds": pooled_text_encoder_2_output, "time_ids": add_time_ids}
+                # negative_added_cond_kwargs = {"text_embeds": negative_pooled_text_encoder_2_output,
+                #                               "time_ids": add_time_ids}
+
+                # checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device, self.temp_device)
+
+                # for step in range(config.align_prop_steps):
+                #     timestep = model.noise_scheduler.timesteps[step] \
+                #         .expand((scaled_latent_image.shape[0],)) \
+                #         .to(device=model.unet.device)
+
+                #     if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
+                #         latent_input = torch.concat(
+                #             [scaled_noisy_latent_image, batch['latent_mask'], scaled_latent_conditioning_image], 1
+                #         )
+                #     else:
+                #         latent_input = scaled_noisy_latent_image
+
+                #     predicted_latent_noise = checkpointed_unet(
+                #         sample=latent_input,
+                #         timestep=timestep,
+                #         encoder_hidden_states=text_encoder_output,
+                #         added_cond_kwargs=added_cond_kwargs,
+                #     ).sample
+
+                #     negative_predicted_latent_noise = checkpointed_unet(
+                #         sample=latent_input,
+                #         timestep=timestep,
+                #         encoder_hidden_states=negative_text_encoder_output,
+                #         added_cond_kwargs=negative_added_cond_kwargs,
+                #     ).sample
+
+                #     cfg_grad = (predicted_latent_noise - negative_predicted_latent_noise)
+                #     cfg_predicted_latent_noise = negative_predicted_latent_noise + config.align_prop_cfg_scale * cfg_grad
+
+                #     scaled_noisy_latent_image = model.noise_scheduler \
+                #         .step(cfg_predicted_latent_noise, timestep[0].long(), scaled_noisy_latent_image) \
+                #         .prev_sample
+
+                #     if step < truncate_timestep_index:
+                #         scaled_noisy_latent_image = scaled_noisy_latent_image.detach()
+
+                #     if self.debug_mode:
+                #         with torch.no_grad():
+                #             # predicted image
+                #             predicted_image = self._project_latent_to_image(scaled_noisy_latent_image)
+                #             self._save_image(
+                #                 predicted_image,
+                #                 config.debug_dir + "/training_batches",
+                #                 "2-predicted_image_" + str(step),
+                #                 train_progress.global_step,
+                #                 True
+                #             )
+
+                # predicted_latent_image = scaled_noisy_latent_image / vae_scaling_factor
+                # predicted_latent_image = predicted_latent_image.to(dtype=model.vae.dtype)
+
+                # predicted_image = []
+                # for x in predicted_latent_image.split(1):
+                #     predicted_image.append(torch.utils.checkpoint.checkpoint(
+                #         model.vae.decode,
+                #         x,
+                #         use_reentrant=False
+                #     ).sample)
+                # predicted_image = torch.cat(predicted_image)
+
+                # model_output_data = {
+                #     'loss_type': 'align_prop',
+                #     'predicted': predicted_image,
+                # }
+
+            timestep_index = self._get_timestep_discrete(
+                model.noise_scheduler.config['num_train_timesteps'],
+                deterministic,
+                generator,
+                scaled_latent_image.shape[0],
+                config,
+            )
+
+            scaled_noisy_latent_image, timestep, sigma = self._add_noise_discrete(
+                scaled_latent_image,
+                latent_noise,
+                timestep_index,
+                model.noise_scheduler.timesteps,
+            )
+
+            if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
+                latent_input = torch.concat(
+                    [scaled_noisy_latent_image, batch['latent_mask'], scaled_latent_conditioning_image], 1
                 )
-                negative_text_encoder_output = negative_text_encoder_output \
-                    .expand((scaled_latent_image.shape[0], -1, -1))
-                negative_pooled_text_encoder_2_output = negative_pooled_text_encoder_2_output \
-                    .expand((scaled_latent_image.shape[0], -1))
-
-                model.noise_scheduler.set_timesteps(config.align_prop_steps)
-
-                scaled_noisy_latent_image = latent_noise
-
-                timestep_high = int(config.align_prop_steps * config.max_noising_strength)
-                timestep_low = \
-                    int(config.align_prop_steps * config.max_noising_strength * (
-                            1.0 - config.align_prop_truncate_steps))
-
-                truncate_timestep_index = config.align_prop_steps - rand.randint(timestep_low, timestep_high)
-
-                # original size of the image
-                original_height = scaled_noisy_latent_image.shape[2] * 8
-                original_width = scaled_noisy_latent_image.shape[3] * 8
-                crops_coords_top = 0
-                crops_coords_left = 0
-                target_height = scaled_noisy_latent_image.shape[2] * 8
-                target_width = scaled_noisy_latent_image.shape[3] * 8
-
-                add_time_ids = torch.tensor([
-                    original_height,
-                    original_width,
-                    crops_coords_top,
-                    crops_coords_left,
-                    target_height,
-                    target_width
-                ]).unsqueeze(0).expand((scaled_latent_image.shape[0], -1))
-
-                add_time_ids = add_time_ids.to(
-                    dtype=scaled_noisy_latent_image.dtype,
-                    device=scaled_noisy_latent_image.device,
-                )
-
-                added_cond_kwargs = {"text_embeds": pooled_text_encoder_2_output, "time_ids": add_time_ids}
-                negative_added_cond_kwargs = {"text_embeds": negative_pooled_text_encoder_2_output,
-                                              "time_ids": add_time_ids}
-
-                checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device)
-
-                for step in range(config.align_prop_steps):
-                    timestep = model.noise_scheduler.timesteps[step] \
-                        .expand((scaled_latent_image.shape[0],)) \
-                        .to(device=model.unet.device)
-
-                    if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
-                        latent_input = torch.concat(
-                            [scaled_noisy_latent_image, batch['latent_mask'], scaled_latent_conditioning_image], 1
-                        )
-                    else:
-                        latent_input = scaled_noisy_latent_image
-
-                    predicted_latent_noise = checkpointed_unet(
-                        sample=latent_input,
-                        timestep=timestep,
-                        encoder_hidden_states=text_encoder_output,
-                        added_cond_kwargs=added_cond_kwargs,
-                    ).sample
-
-                    negative_predicted_latent_noise = checkpointed_unet(
-                        sample=latent_input,
-                        timestep=timestep,
-                        encoder_hidden_states=negative_text_encoder_output,
-                        added_cond_kwargs=negative_added_cond_kwargs,
-                    ).sample
-
-                    cfg_grad = (predicted_latent_noise - negative_predicted_latent_noise)
-                    cfg_predicted_latent_noise = negative_predicted_latent_noise + config.align_prop_cfg_scale * cfg_grad
-
-                    scaled_noisy_latent_image = model.noise_scheduler \
-                        .step(cfg_predicted_latent_noise, timestep[0].long(), scaled_noisy_latent_image) \
-                        .prev_sample
-
-                    if step < truncate_timestep_index:
-                        scaled_noisy_latent_image = scaled_noisy_latent_image.detach()
-
-                    if self.debug_mode:
-                        with torch.no_grad():
-                            # predicted image
-                            predicted_image = self._project_latent_to_image(scaled_noisy_latent_image)
-                            self._save_image(
-                                predicted_image,
-                                config.debug_dir + "/training_batches",
-                                "2-predicted_image_" + str(step),
-                                train_progress.global_step,
-                                True
-                            )
-
-                predicted_latent_image = scaled_noisy_latent_image / vae_scaling_factor
-                predicted_latent_image = predicted_latent_image.to(dtype=model.vae.dtype)
-
-                predicted_image = []
-                for x in predicted_latent_image.split(1):
-                    predicted_image.append(torch.utils.checkpoint.checkpoint(
-                        model.vae.decode,
-                        x,
-                        use_reentrant=False
-                    ).sample)
-                predicted_image = torch.cat(predicted_image)
-
-                model_output_data = {
-                    'loss_type': 'align_prop',
-                    'predicted': predicted_image,
-                }
             else:
-                timestep_index = self._get_timestep_discrete(
-                    model.noise_scheduler.config['num_train_timesteps'],
-                    deterministic,
-                    generator,
-                    scaled_latent_image.shape[0],
-                    config,
-                )
+                latent_input = scaled_noisy_latent_image
 
-                scaled_noisy_latent_image, timestep, sigma = self._add_noise_discrete(
-                    scaled_latent_image,
-                    latent_noise,
-                    timestep_index,
-                    model.noise_scheduler.timesteps,
-                )
+            predicted_flow = model.transformer(
+                hidden_states=latent_input.to(dtype=model.train_dtype.torch_dtype()),
+                timestep=timestep,
+                encoder_hidden_states=text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
+                pooled_projections=pooled_text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
+                return_dict=True
+            ).sample
 
-                if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
-                    latent_input = torch.concat(
-                        [scaled_noisy_latent_image, batch['latent_mask'], scaled_latent_conditioning_image], 1
-                    )
-                else:
-                    latent_input = scaled_noisy_latent_image
-
-                predicted_flow = model.transformer(
-                    hidden_states=latent_input.to(dtype=model.train_dtype.torch_dtype()),
-                    timestep=timestep,
-                    encoder_hidden_states=text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
-                    pooled_projections=pooled_text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
-                    return_dict=True
-                ).sample
-
-                flow = latent_noise - scaled_latent_image
-                model_output_data = {
-                    'loss_type': 'target',
-                    'timestep': timestep,
-                    'predicted': predicted_flow,
-                    'target': flow,
-                }
+            flow = latent_noise - scaled_latent_image
+            model_output_data = {
+                'loss_type': 'target',
+                'timestep': timestep,
+                'predicted': predicted_flow,
+                'target': flow,
+            }
 
             if config.debug_mode:
                 with torch.no_grad():

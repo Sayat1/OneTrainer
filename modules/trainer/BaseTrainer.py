@@ -20,7 +20,7 @@ class BaseTrainer(
     metaclass=ABCMeta,
 ):
     def __init__(self, config: TrainConfig, callbacks: TrainCallbacks, commands: TrainCommands):
-        super(BaseTrainer, self).__init__()
+        super().__init__()
         self.config = config
         self.callbacks = callbacks
         self.commands = commands
@@ -55,7 +55,7 @@ class BaseTrainer(
             self.config.debug_mode,
         )
 
-    def create_data_loader(self, model: BaseModel, train_progress: TrainProgress):
+    def create_data_loader(self, model: BaseModel, train_progress: TrainProgress, is_validation=False):
         return create.create_data_loader(
             self.train_device,
             self.temp_device,
@@ -64,6 +64,7 @@ class BaseTrainer(
             self.config.training_method,
             self.config,
             train_progress,
+            is_validation,
         )
 
     def create_model_saver(self) -> BaseModelSaver:
@@ -77,4 +78,3 @@ class BaseTrainer(
             self.config.model_type,
             self.config.training_method
         )
-

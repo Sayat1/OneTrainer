@@ -20,7 +20,7 @@ class StableDiffusionModelLoader(
     SDConfigModelLoaderMixin,
 ):
     def __init__(self):
-        super(StableDiffusionModelLoader, self).__init__()
+        super().__init__()
 
     def _default_sd_config_name(
             self,
@@ -86,7 +86,7 @@ class StableDiffusionModelLoader(
             subfolder="text_encoder",
             torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
         )
-        text_encoder.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_fp8=False))
+        text_encoder.text_model.embeddings.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_quantization=False))
 
         if vae_model_name:
             vae = AutoencoderKL.from_pretrained(
@@ -150,7 +150,7 @@ class StableDiffusionModelLoader(
             base_model_name: str,
             vae_model_name: str,
     ):
-        state_dict = torch.load(base_model_name)
+        state_dict = torch.load(base_model_name, weights_only=True)
         state_dict = self.__fix_nai_model(state_dict)
 
         num_in_channels = 4
@@ -253,25 +253,25 @@ class StableDiffusionModelLoader(
         try:
             self.__load_internal(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_diffusers(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_safetensors(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_ckpt(model, model_type, weight_dtypes, model_names.base_model, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

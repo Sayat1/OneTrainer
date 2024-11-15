@@ -2,9 +2,9 @@ import json
 import threading
 import traceback
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog
-from typing import Callable
 
 from modules.trainer.GenericTrainer import GenericTrainer
 from modules.ui.AdditionalEmbeddingsTab import AdditionalEmbeddingsTab
@@ -46,7 +46,7 @@ class TrainUI(ctk.CTk):
     training_commands: TrainCommands | None
 
     def __init__(self):
-        super(TrainUI, self).__init__()
+        super().__init__()
 
         self.title("OneTrainer")
         self.geometry("1100x740")
@@ -189,19 +189,31 @@ class TrainUI(ctk.CTk):
         components.label(frame, 7, 0, "Expose Tensorboard",
                          tooltip="Exposes Tensorboard Web UI to all network interfaces (makes it accessible from the network)")
         components.switch(frame, 7, 1, self.ui_state, "tensorboard_expose")
+        components.label(frame, 7, 2, "Tensorboard Port",
+                         tooltip="Port to use for Tensorboard link")
+        components.entry(frame, 7, 3, self.ui_state, "tensorboard_port")
+
+        # validation
+        components.label(frame, 8, 0, "Validation",
+                         tooltip="Enable validation steps and add new graph in tensorboard")
+        components.switch(frame, 8, 1, self.ui_state, "validation")
+
+        components.label(frame, 9, 0, "Validate after",
+                         tooltip="The interval used when validate training")
+        components.time_entry(frame, 9, 1, self.ui_state, "validate_after", "validate_after_unit")
 
         # device
-        components.label(frame, 8, 0, "Dataloader Threads",
+        components.label(frame, 10, 0, "Dataloader Threads",
                          tooltip="Number of threads used for the data loader. Increase if your GPU has room during caching, decrease if it's going out of memory during caching.")
-        components.entry(frame, 8, 1, self.ui_state, "dataloader_threads")
+        components.entry(frame, 10, 1, self.ui_state, "dataloader_threads")
 
-        components.label(frame, 9, 0, "Train Device",
+        components.label(frame, 11, 0, "Train Device",
                          tooltip="The device used for training. Can be \"cuda\", \"cuda:0\", \"cuda:1\" etc. Default:\"cuda\"")
-        components.entry(frame, 9, 1, self.ui_state, "train_device")
+        components.entry(frame, 11, 1, self.ui_state, "train_device")
 
-        components.label(frame, 10, 0, "Temp Device",
+        components.label(frame, 12, 0, "Temp Device",
                          tooltip="The device used to temporarily offload models while they are not used. Default:\"cpu\"")
-        components.entry(frame, 10, 1, self.ui_state, "temp_device")
+        components.entry(frame, 12, 1, self.ui_state, "temp_device")
 
         frame.pack(fill="both", expand=1)
         return frame
@@ -312,17 +324,22 @@ class TrainUI(ctk.CTk):
         components.switch(frame, 2, 1, self.ui_state, "backup_before_save")
 
         # save after
-        components.label(frame, 3, 0, "Save After",
+        components.label(frame, 3, 0, "Save Every",
                          tooltip="The interval used when automatically saving the model during training")
-        components.time_entry(frame, 3, 1, self.ui_state, "save_after", "save_after_unit")
+        components.time_entry(frame, 3, 1, self.ui_state, "save_every", "save_every_unit")
 
         # save now
         components.button(frame, 3, 3, "save now", self.save_now)
 
+        # skip save
+        components.label(frame, 4, 0, "Skip First",
+                         tooltip="Start saving automatically after this interval has elapsed")
+        components.entry(frame, 4, 1, self.ui_state, "save_skip_first", width=50, sticky="nw")
+
         # save filename prefix
-        components.label(frame, 4, 0, "Save Filename Prefix",
+        components.label(frame, 5, 0, "Save Filename Prefix",
                          tooltip="The prefix for filenames used when saving the model during training")
-        components.entry(frame, 4, 1, self.ui_state, "save_filename_prefix")
+        components.entry(frame, 5, 1, self.ui_state, "save_filename_prefix")
 
         frame.pack(fill="both", expand=1)
         return frame
@@ -485,7 +502,7 @@ class TrainUI(ctk.CTk):
             self.additional_embeddings_tab.refresh_ui()
 
     def open_tensorboard(self):
-        webbrowser.open("http://localhost:6006/", new=0, autoraise=False)
+        webbrowser.open("http://localhost:" + str(self.train_config.tensorboard_port), new=0, autoraise=False)
 
     def on_update_train_progress(self, train_progress: TrainProgress, max_sample: int, max_epoch: int):
         self.set_step_progress(train_progress.epoch_step, max_sample)
@@ -503,12 +520,13 @@ class TrainUI(ctk.CTk):
         self.wait_window(window)
 
     def open_sampling_tool(self):
-        window = SampleWindow(
-            self,
-            train_config=self.train_config,
-        )
-        self.wait_window(window)
-        torch_gc()
+        if not self.training_callbacks and not self.training_commands:
+            window = SampleWindow(
+                self,
+                train_config=self.train_config,
+            )
+            self.wait_window(window)
+            torch_gc()
 
     def open_profiling_tool(self):
         self.profiling_window.deiconify()
@@ -541,7 +559,7 @@ class TrainUI(ctk.CTk):
         try:
             trainer.start()
             trainer.train()
-        except:
+        except Exception:
             error_caught = True
             traceback.print_exc()
 

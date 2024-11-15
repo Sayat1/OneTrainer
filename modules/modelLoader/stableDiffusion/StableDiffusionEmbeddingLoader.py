@@ -1,5 +1,5 @@
+import contextlib
 import os
-import traceback
 
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.util.ModelNames import EmbeddingName, ModelNames
@@ -12,7 +12,7 @@ from safetensors.torch import load_file
 
 class StableDiffusionEmbeddingLoader:
     def __init__(self):
-        super(StableDiffusionEmbeddingLoader, self).__init__()
+        super().__init__()
 
     def __load_embedding(
             self,
@@ -21,15 +21,11 @@ class StableDiffusionEmbeddingLoader:
         if embedding_name == "":
             return None
 
-        try:
-            return torch.load(embedding_name)['string_to_param']['*']
-        except:
-            pass
+        with contextlib.suppress(Exception):
+            return torch.load(embedding_name, weights_only=True)['string_to_param']['*']
 
-        try:
+        with contextlib.suppress(Exception):
             return load_file(embedding_name)["emp_params"]
-        except:
-            pass
 
         raise Exception(f"could not load embedding: {embedding_name}")
 
@@ -68,45 +64,27 @@ class StableDiffusionEmbeddingLoader:
         model.additional_embedding_states = []
 
         for embedding_name in model_names.additional_embeddings:
-            stacktraces = []
-
             try:
                 model.additional_embedding_states.append(self.__load_internal(model_names.base_model, embedding_name, False))
-                continue
-            except:
+            except Exception as e1:  # noqa: PERF203
                 try:
                     model.additional_embedding_states.append(self.__load_embedding(embedding_name.model_name))
-                    continue
-                except:
-                    stacktraces.append(traceback.format_exc())
-
-                stacktraces.append(traceback.format_exc())
-
-                for stacktrace in stacktraces:
-                    print(stacktrace)
-                raise Exception("could not load embedding: " + str(model_names.embedding))
+                except Exception as e2:
+                    e2.__cause__ = e1
+                    raise Exception(f"could not load embedding: {embedding_name}") from e2
 
     def load_single(
             self,
             model: StableDiffusionModel,
             model_names: ModelNames,
     ):
-        stacktraces = []
-
         embedding_name = model_names.embedding
 
         try:
             model.embedding_state = self.__load_internal(model_names.embedding.model_name, embedding_name, True)
-            return
-        except:
-            stacktraces.append(traceback.format_exc())
-
+        except Exception as e1:
             try:
                 model.embedding_state = self.__load_embedding(embedding_name.model_name)
-                return
-            except:
-                stacktraces.append(traceback.format_exc())
-
-        for stacktrace in stacktraces:
-            print(stacktrace)
-        raise Exception("could not load embedding: " + str(model_names.embedding))
+            except Exception as e2:
+                e2.__cause__ = e1
+                raise Exception(f"could not load embedding: {embedding_name}") from e2

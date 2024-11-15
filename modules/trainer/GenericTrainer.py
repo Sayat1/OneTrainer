@@ -6,8 +6,8 @@ import subprocess
 import sys
 import traceback
 import psutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
 from modules.model.BaseModel import BaseModel
@@ -26,6 +26,7 @@ from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.memory_util import TorchMemoryRecorder
 from modules.util.time_util import get_string_timestamp
 from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
@@ -47,7 +48,8 @@ class GenericTrainer(BaseTrainer):
     data_loader: BaseDataLoader
     model_saver: BaseModelSaver
     model_sampler: BaseModelSampler
-    model: BaseModel
+    model: BaseModel | None
+    validation_data_loader: BaseDataLoader
 
     previous_sample_time: float
     sample_queue: list[Callable]
@@ -60,7 +62,7 @@ class GenericTrainer(BaseTrainer):
     grad_hook_handles: list[RemovableHandle]
 
     def __init__(self, config: TrainConfig, callbacks: TrainCallbacks, commands: TrainCommands):
-        super(GenericTrainer, self).__init__(config, callbacks, commands)
+        super().__init__(config, callbacks, commands)
 
         import random
         import numpy as np
@@ -83,7 +85,7 @@ class GenericTrainer(BaseTrainer):
                 "--logdir",
                 tensorboard_log_dir,
                 "--port",
-                "6006",
+                str(config.tensorboard_port),
                 "--samples_per_plugin=images=100,scalars=10000",
             ]
 
@@ -92,11 +94,14 @@ class GenericTrainer(BaseTrainer):
 
             self.tensorboard_subprocess = subprocess.Popen(tensorboard_args)
 
+        self.model = None
         self.one_step_trained = False
 
         self.grad_hook_handles = []
 
     def start(self):
+        self.__save_config_to_workspace()
+
         if self.config.clear_cache_before_training and self.config.latent_caching:
             self.__clear_cache()
 
@@ -113,7 +118,7 @@ class GenericTrainer(BaseTrainer):
 
         if self.config.continue_last_backup:
             self.callbacks.on_update_status("searching for previous backups")
-            last_backup_path = self.__get_last_backup_dirpath()
+            last_backup_path = self.config.get_last_backup_path()
 
             if last_backup_path:
                 if self.config.training_method == TrainingMethod.LORA:
@@ -137,6 +142,7 @@ class GenericTrainer(BaseTrainer):
 
         self.callbacks.on_update_status("running model setup")
 
+        self.model_setup.setup_optimizations(self.model, self.config)
         self.model_setup.setup_train_device(self.model, self.config)
         self.model_setup.setup_model(self.model, self.config)
         self.model.to(self.temp_device)
@@ -155,6 +161,17 @@ class GenericTrainer(BaseTrainer):
         self.sample_queue = []
 
         self.parameters = self.model.parameters.parameters()
+        if self.config.validation:
+            self.validation_data_loader = self.create_data_loader(
+                self.model, self.model.train_progress, is_validation=True
+            )
+
+    def __save_config_to_workspace(self):
+        path = path_util.canonical_join(self.config.workspace_dir, "config")
+        os.makedirs(Path(path).absolute(), exist_ok=True)
+        path = path_util.canonical_join(path, f"{get_string_timestamp()}.json")
+        with open(path, "w") as f:
+            json.dump(self.config.to_pack_dict(), f, indent=4)
 
     def __clear_cache(self):
         print(
@@ -166,21 +183,6 @@ class GenericTrainer(BaseTrainer):
                 path = os.path.join(self.config.cache_dir, filename)
                 if os.path.isdir(path) and (filename.startswith('epoch-') or filename in ['image', 'text']):
                     shutil.rmtree(path)
-
-    def __get_last_backup_dirpath(self):
-        backup_dirpath = os.path.join(self.config.workspace_dir, "backup")
-        if os.path.exists(backup_dirpath):
-            backup_directories = sorted(
-                [dirpath for dirpath in os.listdir(backup_dirpath) if
-                 os.path.isdir(os.path.join(backup_dirpath, dirpath))],
-                reverse=True,
-            )
-
-            if backup_directories:
-                last_backup_dirpath = backup_directories[0]
-                return os.path.join(backup_dirpath, last_backup_dirpath)
-
-        return None
 
     def __prune_backups(self, backups_to_keep: int):
         backup_dirpath = os.path.abspath(os.path.join(self.config.workspace_dir, "backup"))
@@ -263,8 +265,10 @@ class GenericTrainer(BaseTrainer):
 
                     def on_sample_default(image: Image):
                         if self.config.samples_to_tensorboard:
-                            self.tensorboard.add_image(f"sample{str(i)} - {safe_prompt}", pil_to_tensor(image),
-                                                       train_progress.global_step)
+                            self.tensorboard.add_image(
+                                f"sample{str(i)} - {safe_prompt}", pil_to_tensor(image),  # noqa: B023
+                                train_progress.global_step
+                            )
                         self.callbacks.on_sample_default(image)
 
                     def on_sample_custom(image: Image):
@@ -287,7 +291,7 @@ class GenericTrainer(BaseTrainer):
                         on_sample=on_sample,
                         on_update_progress=on_update_progress,
                     )
-                except:
+                except Exception:
                     traceback.print_exc()
                     print("Error during sampling, proceeding without sampling")
 
@@ -300,7 +304,7 @@ class GenericTrainer(BaseTrainer):
             sample_params_list: list[SampleConfig] = None,
     ):
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             [optimizer.eval() for optimizer in self.model.optimizers]
         torch_gc()
@@ -346,11 +350,83 @@ class GenericTrainer(BaseTrainer):
 
         self.model_setup.setup_train_device(self.model, self.config)
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             [optimizer.train() for optimizer in self.model.optimizers]
 
         torch_gc()
+
+    def __validate(self, train_progress: TrainProgress):
+        if self.__needs_validate(train_progress):
+            self.validation_data_loader.get_data_set().start_next_epoch()
+            current_epoch_length_validation = self.validation_data_loader.get_data_set().approximate_length()
+
+            if current_epoch_length_validation == 0:
+                return
+
+            self.callbacks.on_update_status("calculating validation loss")
+            self.model_setup.setup_train_device(self.model, self.config)
+
+            torch_gc()
+
+            step_tqdm_validation = tqdm(
+                self.validation_data_loader.get_data_loader(),
+                desc="validation_step",
+                total=current_epoch_length_validation)
+
+            accumulated_loss_per_concept = {}
+            concept_counts = {}
+            mapping_seed_to_label = {}
+            mapping_label_to_seed = {}
+
+            for validation_batch in step_tqdm_validation:
+                if self.__needs_gc(train_progress):
+                    torch_gc()
+
+                with torch.no_grad():
+                    model_output_data = self.model_setup.predict(
+                        self.model, validation_batch, self.config, train_progress)
+                    loss_validation = self.model_setup.calculate_loss(
+                        self.model, validation_batch, model_output_data, self.config)
+
+                # since validation batch size = 1
+                concept_name = validation_batch["concept_name"][0]
+                concept_path = validation_batch["concept_path"][0]
+                concept_seed = validation_batch["concept_seed"].item()
+                loss = loss_validation.item()
+
+                label = concept_name if concept_name else os.path.basename(concept_path)
+                # check and fix collision to display both graphs in tensorboard
+                if label in mapping_label_to_seed and mapping_label_to_seed[label] != concept_seed:
+                    suffix = 1
+                    new_label = f"{label}({suffix})"
+                    while new_label in mapping_label_to_seed and mapping_label_to_seed[new_label] != concept_seed:
+                        suffix += 1
+                        new_label = f"{label}({suffix})"
+                    label = new_label
+
+                if concept_seed not in mapping_seed_to_label:
+                    mapping_seed_to_label[concept_seed] = label
+                    mapping_label_to_seed[label] = concept_seed
+
+                accumulated_loss_per_concept[concept_seed] = accumulated_loss_per_concept.get(concept_seed, 0) + loss
+                concept_counts[concept_seed] = concept_counts.get(concept_seed, 0) + 1
+
+            for concept_seed, total_loss in accumulated_loss_per_concept.items():
+                average_loss = total_loss / concept_counts[concept_seed]
+
+                self.tensorboard.add_scalar(f"loss/validation_step/{mapping_seed_to_label[concept_seed]}",
+                                            average_loss,
+                                            train_progress.global_step)
+
+            if len(concept_counts) > 1:
+                total_loss = sum(accumulated_loss_per_concept[key] for key in concept_counts)
+                total_count = sum(concept_counts[key] for key in concept_counts)
+                total_average_loss = total_loss / total_count
+
+                self.tensorboard.add_scalar("loss/validation_step/total_average",
+                                            total_average_loss,
+                                            train_progress.global_step)
 
     def __save_backup_config(self, backup_path):
         config_path = os.path.join(backup_path, "onetrainer_config")
@@ -376,7 +452,7 @@ class GenericTrainer(BaseTrainer):
         backup_path = os.path.abspath(os.path.join(self.config.workspace_dir, "backup", backup_name))
 
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             [optimizer.eval() for optimizer in self.model.optimizers]
 
@@ -392,13 +468,13 @@ class GenericTrainer(BaseTrainer):
             )
 
             self.__save_backup_config(backup_path)
-        except:
+        except Exception:
             traceback.print_exc()
             print("Could not save backup. Check your disk space!")
             try:
                 if os.path.isdir(backup_path):
                     shutil.rmtree(backup_path)
-            except:
+            except Exception:
                 traceback.print_exc()
                 print("Could not delete partial backup")
         finally:
@@ -407,7 +483,7 @@ class GenericTrainer(BaseTrainer):
 
         self.model_setup.setup_train_device(self.model, self.config)
         # Special case for schedule-free optimizers.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             [optimizer.train() for optimizer in self.model.optimizers]
 
@@ -426,7 +502,7 @@ class GenericTrainer(BaseTrainer):
                 self.model.ema.copy_ema_to(self.parameters, store_temp=True)
 
             # Special case for schedule-free optimizers.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 [optimizer.eval() for optimizer in self.model.optimizers]
             self.model_saver.save(
@@ -436,16 +512,16 @@ class GenericTrainer(BaseTrainer):
                 output_model_destination=save_path,
                 dtype=self.config.output_dtype.torch_dtype()
             )
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 [optimizer.train() for optimizer in self.model.optimizers]
-        except:
+        except Exception:
             traceback.print_exc()
             print("Could not save model. Check your disk space!")
             try:
                 if os.path.isfile(save_path):
                     shutil.rmtree(save_path)
-            except:
+            except Exception:
                 traceback.print_exc()
                 print("Could not delete partial save")
         finally:
@@ -467,12 +543,19 @@ class GenericTrainer(BaseTrainer):
         )
 
     def __needs_save(self, train_progress: TrainProgress):
-        return self.repeating_action_needed(
-            "save", self.config.save_after, self.config.save_after_unit, train_progress, start_at_zero=False
+        return self.single_action_elapsed(
+            "save_skip_first", self.config.save_skip_first, self.config.save_every_unit, train_progress
+        ) and self.repeating_action_needed(
+            "save", self.config.save_every, self.config.save_every_unit, train_progress, start_at_zero=False
         )
 
     def __needs_gc(self, train_progress: TrainProgress):
         return self.repeating_action_needed("gc", 5, TimeUnit.MINUTE, train_progress, start_at_zero=False)
+
+    def __needs_validate(self, train_progress: TrainProgress):
+        return self.repeating_action_needed(
+            "validate", self.config.validate_after, self.config.validate_after_unit, train_progress
+        )
 
     def __is_update_step(self, train_progress: TrainProgress) -> bool:
         return self.repeating_action_needed(
@@ -493,14 +576,14 @@ class GenericTrainer(BaseTrainer):
                             if scaler:
                                 def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
                                     scaler.unscale_parameter_(tensor, optimizer)
-                                    if self.config.max_grad_norm != 0.0:
-                                        nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
+                                    if self.config.clip_grad_norm is not None:
+                                        nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
                                     scaler.maybe_opt_step_parameter(tensor, param_group, i, optimizer)
                                     tensor.grad = None
                             else:
                                 def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
-                                    if self.config.max_grad_norm != 0.0:
-                                        nn.utils.clip_grad_norm_(tensor, self.config.max_grad_norm)
+                                    if self.config.clip_grad_norm is not None:
+                                        nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
                                     optimizer.step_parameter(tensor, param_group, i)
                                     tensor.grad = None
 
@@ -511,7 +594,7 @@ class GenericTrainer(BaseTrainer):
         # Special case for schedule-free optimizers, which need eval()
         # called before evaluation. Can and should move this to a callback
         # during a refactoring.
-        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+        if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
             torch.clear_autocast_cache()
             [optimizer.eval() for optimizer in self.model.optimizers]
 
@@ -522,14 +605,11 @@ class GenericTrainer(BaseTrainer):
 
         if self.config.only_cache:
             self.callbacks.on_update_status("caching")
-            for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch"):
+            for _epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout, desc="epoch"):
                 self.data_loader.get_data_set().start_next_epoch()
             return
 
-        if enable_grad_scaling(self.config.train_dtype, self.parameters):
-            scaler = create_grad_scaler()
-        else:
-            scaler = None
+        scaler = create_grad_scaler() if enable_grad_scaling(self.config.train_dtype, self.parameters) else None
 
         self.__apply_fused_back_pass(scaler)
 
@@ -540,7 +620,7 @@ class GenericTrainer(BaseTrainer):
         lr_scheduler = None
         accumulated_loss = 0.0
         ema_loss = None
-        for epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch"):
+        for _epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch"):
             print("")
             self.callbacks.on_update_status("starting epoch/caching")
 
@@ -554,7 +634,7 @@ class GenericTrainer(BaseTrainer):
             # Special case for schedule-free optimizers, which need train()
             # called before training. Can and should move this to a callback
             # during a refactoring.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 [optimizer.train() for optimizer in self.model.optimizers]
 
@@ -571,17 +651,24 @@ class GenericTrainer(BaseTrainer):
                     approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
                     batch_size=self.config.batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    global_step=train_progress.global_step
+                    global_step=train_progress.global_step,
+                    eta_min=self.config.learning_rate_min,
                 )
 
             current_epoch_length = self.data_loader.get_data_set().approximate_length()
             step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step",position=0, file=sys.stdout, total=current_epoch_length,
                              initial=train_progress.epoch_step)
-            for epoch_step, batch in enumerate(step_tqdm):
+            for batch in step_tqdm:
                 if self.__needs_sample(train_progress) or self.commands.get_and_reset_sample_default_command():
                     self.__enqueue_sample_during_training(
                         lambda: self.__sample_during_training(train_progress, train_device)
                     )
+
+                if self.__needs_backup(train_progress):
+                    self.commands.backup()
+
+                if self.__needs_save(train_progress):
+                    self.commands.save()
 
                 sample_commands = self.commands.get_and_reset_sample_custom_commands()
                 if sample_commands:
@@ -598,78 +685,91 @@ class GenericTrainer(BaseTrainer):
 
                 if not has_gradient:
                     self.__execute_sample_during_training()
+                    transferred_to_temp_device = False
 
-                if self.__needs_backup(train_progress) or self.commands.get_and_reset_backup_command():
-                    self.backup(train_progress)
+                    if self.commands.get_and_reset_backup_command():
+                        self.model.to(self.temp_device)
+                        self.backup(train_progress)
+                        transferred_to_temp_device = True
 
-                if self.__needs_save(train_progress) or self.commands.get_and_reset_save_command():
-                    self.save(train_progress)
+                    if self.commands.get_and_reset_save_command():
+                        self.model.to(self.temp_device)
+                        self.save(train_progress)
+                        transferred_to_temp_device = True
+
+                    if transferred_to_temp_device:
+                        self.model_setup.setup_train_device(self.model, self.config)
 
                 self.callbacks.on_update_status("training")
 
-                model_output_data = self.model_setup.predict(self.model, batch, self.config, train_progress)
+                with TorchMemoryRecorder(enabled=False):
+                    model_output_data = self.model_setup.predict(self.model, batch, self.config, train_progress)
 
-                loss = self.model_setup.calculate_loss(self.model, batch, model_output_data, self.config)
+                    loss = self.model_setup.calculate_loss(self.model, batch, model_output_data, self.config)
 
-                loss = loss / self.config.gradient_accumulation_steps
-                if scaler:
-                    scaler.scale(loss).backward()
-                else:
-                    loss.backward()
-
-                has_gradient = True
-                accumulated_loss += loss.item()
-
-                if self.__is_update_step(train_progress):
-                    if scaler and self.config.optimizer.optimizer.supports_fused_back_pass() and self.config.optimizer.fused_back_pass:
-                        for optimizer in self.model.optimizers:
-                            scaler.step_after_unscale_parameter_(optimizer)
-                        scaler.update()
-                    elif scaler:
-                        for optimizer in self.model.optimizers:
-                            scaler.unscale_(optimizer)
-                        if self.config.max_grad_norm != 0.0:
-                            nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
-                        for optimizer in self.model.optimizers:
-                            scaler.step(optimizer)
-                        scaler.update()
+                    loss = loss / self.config.gradient_accumulation_steps
+                    if scaler:
+                        scaler.scale(loss).backward()
                     else:
-                        if self.config.max_grad_norm != 0.0:
-                            nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
-                        [optimizer.step() for optimizer in self.model.optimizers]
+                        loss.backward()
 
-                    lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
-                    [optimizer.zero_grad(set_to_none=True) for optimizer in self.model.optimizers]
-                    has_gradient = False
+                    has_gradient = True
+                    accumulated_loss += loss.item()
 
-                    self.model_setup.report_to_tensorboard(
-                        self.model, self.config, lr_scheduler, self.tensorboard
-                    )
+                    if self.__is_update_step(train_progress):
+                        if scaler and self.config.optimizer.optimizer.supports_fused_back_pass() and self.config.optimizer.fused_back_pass:
+                            for optimizer in self.model.optimizers:
+                                scaler.step_after_unscale_parameter_(optimizer)
+                            scaler.update()
+                        elif scaler:
+                            for optimizer in self.model.optimizers:
+                                scaler.unscale_(optimizer)
+                            if self.config.max_grad_norm != 0.0:
+                                nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
+                            for optimizer in self.model.optimizers:
+                                scaler.step(optimizer)
+                            scaler.update()
+                        else:
+                            if self.config.max_grad_norm != 0.0:
+                                nn.utils.clip_grad_norm_(self.parameters, self.config.max_grad_norm)
+                            [optimizer.step() for optimizer in self.model.optimizers]
 
-                    self.tensorboard.add_scalar("loss/loss", accumulated_loss, train_progress.global_step)
-                    ema_loss = ema_loss or accumulated_loss
-                    ema_loss = (ema_loss * 0.99) + (accumulated_loss * 0.01)
-                    step_tqdm.set_postfix({
-                        'loss': accumulated_loss,
-                        'smooth loss': ema_loss,
-                    })
-                    self.tensorboard.add_scalar("loss/smooth loss", ema_loss, train_progress.global_step)
-                    accumulated_loss = 0.0
-
-                    self.model_setup.after_optimizer_step(self.model, self.config, train_progress)
-                    if self.model.ema:
-                        update_step = train_progress.global_step // self.config.gradient_accumulation_steps
-                        self.tensorboard.add_scalar(
-                            "ema_decay",
-                            self.model.ema.get_current_decay(update_step),
-                            train_progress.global_step
-                        )
-                        self.model.ema.step(
-                            self.parameters,
-                            update_step
+                        lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
+                        [optimizer.zero_grad(set_to_none=True) for optimizer in self.model.optimizers]
+                        has_gradient = False
+                        reported_lr = self.model_setup.report_to_tensorboard(
+                            self.model, self.config, lr_scheduler, self.tensorboard
                         )
 
-                    self.one_step_trained = True
+                        self.tensorboard.add_scalar("loss/train_step", accumulated_loss, train_progress.global_step)
+                        ema_loss = ema_loss or accumulated_loss
+                        ema_loss = (ema_loss * 0.99) + (accumulated_loss * 0.01)
+                        update_reports = {
+                            'loss': accumulated_loss,
+                            'smooth loss': ema_loss,
+                        }
+                        update_reports.update(reported_lr)
+                        step_tqdm.set_postfix(update_reports)
+                        self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
+                        accumulated_loss = 0.0
+
+                        self.model_setup.after_optimizer_step(self.model, self.config, train_progress)
+                        if self.model.ema:
+                            update_step = train_progress.global_step // self.config.gradient_accumulation_steps
+                            self.tensorboard.add_scalar(
+                                "ema_decay",
+                                self.model.ema.get_current_decay(update_step),
+                                train_progress.global_step
+                            )
+                            self.model.ema.step(
+                                self.parameters,
+                                update_step
+                            )
+
+                        self.one_step_trained = True
+
+                if self.config.validation:
+                    self.__validate(train_progress)
 
                 train_progress.next_step(self.config.batch_size)
                 self.callbacks.on_update_train_progress(train_progress, current_epoch_length, self.config.epochs)
@@ -685,10 +785,12 @@ class GenericTrainer(BaseTrainer):
 
     def end(self):
         if self.one_step_trained:
+            self.model.to(self.temp_device)
+
             if self.config.backup_before_save:
                 self.backup(self.model.train_progress)
             # Special case for schedule-free optimizers.
-            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wraper:
+            if self.config.optimizer.optimizer.is_schedule_free or self.config.use_schedulefree_wrapper:
                 torch.clear_autocast_cache()
                 [optimizer.eval() for optimizer in self.model.optimizers]
 
@@ -706,6 +808,8 @@ class GenericTrainer(BaseTrainer):
                 output_model_destination=self.config.output_model_destination,
                 dtype=self.config.output_dtype.torch_dtype()
             )
+        elif self.model is not None:
+            self.model.to(self.temp_device)
 
             if self.model.ema:
                 self.model.ema.copy_temp_to(self.parameters)

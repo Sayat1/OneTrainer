@@ -17,7 +17,7 @@ class WuerstchenFineTuneSetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(WuerstchenFineTuneSetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -33,26 +33,19 @@ class WuerstchenFineTuneSetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="prior_text_encoder",
-                display_name="prior_text_encoder",
                 parameters=model.prior_text_encoder.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
 
         if config.train_any_embedding():
-            for parameter, placeholder, name in zip(model.prior_embedding_wrapper.additional_embeddings,
-                                                    model.prior_embedding_wrapper.additional_embedding_placeholders,
-                                                    model.prior_embedding_wrapper.additional_embedding_names):
-                parameter_group_collection.add_group(NamedParameterGroup(
-                    unique_name=f"prior_embeddings/{name}",
-                    display_name=f"prior_embeddings/{placeholder}",
-                    parameters=[parameter],
-                    learning_rate=config.embedding_learning_rate,
-                ))
+            self._add_embedding_param_groups(
+                model.prior_embedding_wrapper, parameter_group_collection, config.embedding_learning_rate,
+                "prior_embeddings"
+            )
 
         if config.prior.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="prior_prior",
-                display_name="prior_prior",
                 parameters=model.prior_prior.parameters(),
                 learning_rate=config.prior.learning_rate,
             ))
@@ -97,9 +90,7 @@ class WuerstchenFineTuneSetup(
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self.setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,

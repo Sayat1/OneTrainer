@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from copy import deepcopy
 from typing import Any
@@ -11,6 +12,7 @@ from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.ConfigPart import ConfigPart
 from modules.util.enum.DataType import DataType
 from modules.util.enum.EMAMode import EMAMode
+from modules.util.enum.GradientCheckpointingMethod import GradientCheckpointingMethod
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.LearningRateScaler import LearningRateScaler
 from modules.util.enum.LearningRateScheduler import LearningRateScheduler
@@ -90,7 +92,7 @@ class TrainOptimizerConfig(BaseConfig):
     adam_debias: bool
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainOptimizerConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -138,7 +140,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("relative_step", None, bool, False))
         data.append(("safeguard_warmup", None, bool, False))
         data.append(("scale_parameter", None, bool, False))
-        data.append(("stochastic_rounding", True, bool, False))
+        data.append(("stochastic_rounding", None, bool, False))
         data.append(("use_bias_correction", None, bool, False))
         data.append(("use_triton", None, bool, False))
         data.append(("warmup_init", None, bool, False))
@@ -155,7 +157,7 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("ams_bound", None, bool, False))
         data.append(("r", None, float, True))
         data.append(("adanorm", None, bool, False))
-        data.append(("adam_debias", False, bool, False))
+        data.append(("adam_debias", None, bool, False))
 
         return TrainOptimizerConfig(data)
 
@@ -173,7 +175,7 @@ class TrainModelPartConfig(BaseConfig):
     attention_mask: bool
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainModelPartConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -205,7 +207,7 @@ class TrainEmbeddingConfig(BaseConfig):
     initial_embedding_text: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainEmbeddingConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -233,6 +235,10 @@ class TrainConfig(BaseConfig):
     cache_dir: str
     tensorboard: bool
     tensorboard_expose: bool
+    tensorboard_port: str
+    validation: bool
+    validate_after: float
+    validate_after_unit: TimeUnit
     continue_last_backup: bool
     include_train_config: ConfigPart
 
@@ -242,7 +248,8 @@ class TrainConfig(BaseConfig):
     output_dtype: DataType
     output_model_format: ModelFormat
     output_model_destination: str
-    gradient_checkpointing: bool
+    gradient_checkpointing: GradientCheckpointingMethod
+    layer_offload_fraction: float
     force_circular_padding: bool
 
     # data settings
@@ -259,8 +266,9 @@ class TrainConfig(BaseConfig):
     # of restrictions with ConfigList.
     scheduler_params: list[dict[str, str]]
     learning_rate: float
-    learning_rate_warmup_steps: int
+    learning_rate_warmup_steps: float
     learning_rate_cycles: float
+    learning_rate_min: float
     epochs: int
     batch_size: int
     gradient_accumulation_steps: int
@@ -285,6 +293,7 @@ class TrainConfig(BaseConfig):
     align_prop_cfg_scale: float
     mse_strength: float
     mae_strength: float
+    log_cosh_strength: float
     vb_loss_strength: float
     loss_weight_fn: LossWeight
     loss_weight_strength: float
@@ -292,6 +301,7 @@ class TrainConfig(BaseConfig):
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
     seed: int
+    clip_grad_norm: float
 
     # noise
     offset_noise_weight: float
@@ -302,7 +312,6 @@ class TrainConfig(BaseConfig):
     timestep_distribution: TimestepDistribution
     min_noising_strength: float
     max_noising_strength: float
-    max_grad_norm: float
     noising_weight: float
     noising_bias: float
 
@@ -368,7 +377,7 @@ class TrainConfig(BaseConfig):
     optimizer: TrainOptimizerConfig
     optimizer_defaults: dict[str, TrainOptimizerConfig]
     use_mechanic:bool
-    use_schedulefree_wraper:bool
+    use_schedulefree_wrapper:bool
 
     # sample settings
     sample_definition_file_name: str
@@ -388,17 +397,22 @@ class TrainConfig(BaseConfig):
     save_after: float
     save_after_unit: TimeUnit
     rolling_save_count: int
+    save_every: int
+    save_every_unit: TimeUnit
+    save_skip_first: int
     save_filename_prefix: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainConfig, self).__init__(
+        super().__init__(
             data,
-            config_version=4,
+            config_version=6,
             config_migrations={
                 0: self.__migration_0,
                 1: self.__migration_1,
                 2: self.__migration_2,
                 3: self.__migration_3,
+                4: self.__migration_4,
+                5: self.__migration_5,
             }
         )
 
@@ -542,6 +556,26 @@ class TrainConfig(BaseConfig):
 
         return migrated_data
 
+    def __migration_4(self, data: dict) -> dict:
+        migrated_data = data.copy()
+
+        gradient_checkpointing = migrated_data.pop("gradient_checkpointing")
+
+        if gradient_checkpointing:
+            migrated_data["gradient_checkpointing"] = GradientCheckpointingMethod.ON
+        else:
+            migrated_data["gradient_checkpointing"] = GradientCheckpointingMethod.OFF
+
+        return migrated_data
+
+    def __migration_5(self, data: dict) -> dict:
+        migrated_data = data.copy()
+
+        migrated_data["save_every"] = migrated_data.pop("save_after")
+        migrated_data["save_every_unit"] = migrated_data.pop("save_after_unit")
+
+        return migrated_data
+
     def weight_dtypes(self) -> ModelWeightDtypes:
         return ModelWeightDtypes(
             self.weight_dtype if self.unet.weight_dtype == DataType.NONE else self.unet.weight_dtype,
@@ -580,15 +614,33 @@ class TrainConfig(BaseConfig):
 
     def train_text_encoder_or_embedding(self) -> bool:
         return (self.text_encoder.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder.train_embedding and self.train_any_embedding())
+            or ((self.text_encoder.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
 
     def train_text_encoder_2_or_embedding(self) -> bool:
         return (self.text_encoder_2.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder_2.train_embedding and self.train_any_embedding())
+            or ((self.text_encoder_2.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
 
     def train_text_encoder_3_or_embedding(self) -> bool:
         return (self.text_encoder_3.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder_3.train_embedding and self.train_any_embedding())
+            or ((self.text_encoder_3.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
+
+    def get_last_backup_path(self) -> str | None:
+        backups_path = os.path.join(self.workspace_dir, "backup")
+        if os.path.exists(backups_path):
+            backup_paths = sorted(
+                [path for path in os.listdir(backups_path) if
+                 os.path.isdir(os.path.join(backups_path, path))],
+                reverse=True,
+            )
+
+            if backup_paths:
+                last_backup_path = backup_paths[0]
+                return os.path.join(backups_path, last_backup_path)
+
+        return None
 
     def to_settings_dict(self) -> dict:
         config = TrainConfig.default_values().from_dict(self.to_dict())
@@ -601,17 +653,19 @@ class TrainConfig(BaseConfig):
     def to_pack_dict(self) -> dict:
         config = TrainConfig.default_values().from_dict(self.to_dict())
 
-        with open(config.concept_file_name, 'r') as f:
-            concepts = json.load(f)
-            for i in range(len(concepts)):
-                concepts[i] = ConceptConfig.default_values().from_dict(concepts[i])
-            config.concepts = concepts
+        if config.concepts is None:
+            with open(config.concept_file_name, 'r') as f:
+                concepts = json.load(f)
+                for i in range(len(concepts)):
+                    concepts[i] = ConceptConfig.default_values().from_dict(concepts[i])
+                config.concepts = concepts
 
-        with open(config.sample_definition_file_name, 'r') as f:
-            samples = json.load(f)
-            for i in range(len(samples)):
-                samples[i] = SampleConfig.default_values().from_dict(samples[i])
-            config.samples = samples
+        if config.samples is None:
+            with open(config.sample_definition_file_name, 'r') as f:
+                samples = json.load(f)
+                for i in range(len(samples)):
+                    samples[i] = SampleConfig.default_values().from_dict(samples[i])
+                config.samples = samples
 
         return config.to_dict()
 
@@ -636,16 +690,21 @@ class TrainConfig(BaseConfig):
         data.append(("cache_dir", "workspace-cache/run", str, False))
         data.append(("tensorboard", True, bool, False))
         data.append(("tensorboard_expose", False, bool, False))
+        data.append(("tensorboard_port", 6006, int, False))
+        data.append(("validation", False, bool, False))
+        data.append(("validate_after", 1, int, False))
+        data.append(("validate_after_unit", TimeUnit.EPOCH, TimeUnit, False))
         data.append(("continue_last_backup", False, bool, False))
         data.append(("include_train_config", ConfigPart.NONE, ConfigPart, False))
 
         # model settings
-        data.append(("base_model_name", "runwayml/stable-diffusion-v1-5", str, False))
+        data.append(("base_model_name", "stable-diffusion-v1-5/stable-diffusion-v1-5", str, False))
         data.append(("weight_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("output_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("output_model_format", ModelFormat.SAFETENSORS, ModelFormat, False))
         data.append(("output_model_destination", "models/model.safetensors", str, False))
-        data.append(("gradient_checkpointing", True, bool, False))
+        data.append(("gradient_checkpointing", GradientCheckpointingMethod.ON, GradientCheckpointingMethod, False))
+        data.append(("layer_offload_fraction", 0.0, float, False))
         data.append(("force_circular_padding", False, bool, False))
 
         # data settings
@@ -660,8 +719,9 @@ class TrainConfig(BaseConfig):
         data.append(("custom_learning_rate_scheduler", None, str, True))
         data.append(("scheduler_params", [], list[dict[str, str]], True))
         data.append(("learning_rate", 3e-6, float, False))
-        data.append(("learning_rate_warmup_steps", 200, int, False))
+        data.append(("learning_rate_warmup_steps", 200, float, False))
         data.append(("learning_rate_cycles", 1, int, False))
+        data.append(("learning_rate_min", 0.0, float, False))
         data.append(("epochs", 100, int, False))
         data.append(("batch_size", 1, int, False))
         data.append(("gradient_accumulation_steps", 1, int, False))
@@ -686,6 +746,7 @@ class TrainConfig(BaseConfig):
         data.append(("align_prop_cfg_scale", 7.0, float, False))
         data.append(("mse_strength", 1.0, float, False))
         data.append(("mae_strength", 0.0, float, False))
+        data.append(("log_cosh_strength", 0.0, float, False))
         data.append(("vb_loss_strength", 1.0, float, False))
         data.append(("loss_weight_fn", LossWeight.CONSTANT, LossWeight, False))
         data.append(("loss_weight_strength", 5.0, float, False))
@@ -693,6 +754,7 @@ class TrainConfig(BaseConfig):
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
         data.append(("seed", -1, int, False))
+        data.append(("clip_grad_norm", 1.0, float, True))
 
         # noise
         data.append(("offset_noise_weight", 0.0, float, False))
@@ -702,7 +764,6 @@ class TrainConfig(BaseConfig):
         data.append(("force_epsilon_prediction", False, bool, False))
         data.append(("min_noising_strength", 0.0, float, False))
         data.append(("max_noising_strength", 1.0, float, False))
-        data.append(("max_grad_norm", 1.0, float, False))
         data.append(("timestep_distribution", TimestepDistribution.UNIFORM, TimestepDistribution, False))
         data.append(("noising_weight", 0.0, float, False))
         data.append(("noising_bias", 0.0, float, False))
@@ -811,7 +872,7 @@ class TrainConfig(BaseConfig):
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
         data.append(("optimizer_defaults", {}, dict[str, TrainOptimizerConfig], False))
         data.append(("use_mechanic", False, bool, False))
-        data.append(("use_schedulefree_wraper", False, bool, False))
+        data.append(("use_schedulefree_wrapper", False, bool, False))
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
@@ -831,6 +892,9 @@ class TrainConfig(BaseConfig):
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
         data.append(("rolling_save_count", 1, int, False))
+        data.append(("save_every", 0, int, False))
+        data.append(("save_every_unit", TimeUnit.NEVER, TimeUnit, False))
+        data.append(("save_skip_first", 0, int, False))
         data.append(("save_filename_prefix", "", str, False))
 
         return TrainConfig(data)

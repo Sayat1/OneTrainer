@@ -7,10 +7,6 @@ from modules.util.enum.BalancingStrategy import BalancingStrategy
 from modules.util.ui import components
 from modules.util.ui.UIState import UIState
 
-import torch
-from torchvision.transforms import functional
-
-import customtkinter as ctk
 from mgds.LoadingPipeline import LoadingPipeline
 from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.PipelineModule import PipelineModule
@@ -23,6 +19,11 @@ from mgds.pipelineModules.RandomMaskRotateCrop import RandomMaskRotateCrop
 from mgds.pipelineModules.RandomRotate import RandomRotate
 from mgds.pipelineModules.RandomSaturation import RandomSaturation
 from mgds.pipelineModuleTypes.RandomAccessPipelineModule import RandomAccessPipelineModule
+
+import torch
+from torchvision.transforms import functional
+
+import customtkinter as ctk
 from PIL import Image
 
 
@@ -31,7 +32,7 @@ class InputPipelineModule(
     RandomAccessPipelineModule,
 ):
     def __init__(self, data: dict):
-        super(InputPipelineModule, self).__init__()
+        super().__init__()
         self.data = data
 
     def length(self) -> int:
@@ -100,15 +101,20 @@ class ConceptWindow(ctk.CTkToplevel):
                          tooltip="Enable or disable this concept")
         components.switch(frame, 1, 1, self.ui_state, "enabled")
 
+        # validation_concept
+        components.label(frame, 2, 0, "Validation concept",
+                         tooltip="Use concept for validation instead of training")
+        components.switch(frame, 2, 1, self.ui_state, "validation_concept")
+
         # path
-        components.label(frame, 2, 0, "Path",
+        components.label(frame, 3, 0, "Path",
                          tooltip="Path where the training data is located")
-        components.dir_entry(frame, 2, 1, self.ui_state, "path")
+        components.dir_entry(frame, 3, 1, self.ui_state, "path")
 
         # prompt source
-        components.label(frame, 3, 0, "Prompt Source",
+        components.label(frame, 4, 0, "Prompt Source",
                          tooltip="The source for prompts used during training. When selecting \"From single text file\", select a text file that contains a list of prompts")
-        prompt_path_entry = components.file_entry(frame, 3, 2, self.text_ui_state, "prompt_path")
+        prompt_path_entry = components.file_entry(frame, 4, 2, self.text_ui_state, "prompt_path")
 
         def set_prompt_path_entry_enabled(option: str):
             if option == 'concept':
@@ -118,7 +124,7 @@ class ConceptWindow(ctk.CTkToplevel):
                 for child in prompt_path_entry.children.values():
                     child.configure(state="disabled")
 
-        components.options_kv(frame, 3, 1, [
+        components.options_kv(frame, 4, 1, [
             ("From text file per sample", 'sample'),
             ("From single text file", 'concept'),
             ("From image file name", 'filename'),
@@ -126,30 +132,30 @@ class ConceptWindow(ctk.CTkToplevel):
         set_prompt_path_entry_enabled(concept.text.prompt_source)
 
         # include subdirectories
-        components.label(frame, 4, 0, "Include Subdirectories",
+        components.label(frame, 5, 0, "Include Subdirectories",
                          tooltip="Includes images from subdirectories into the dataset")
-        components.switch(frame, 4, 1, self.ui_state, "include_subdirectories")
+        components.switch(frame, 5, 1, self.ui_state, "include_subdirectories")
 
         # image variations
-        components.label(frame, 5, 0, "Image Variations",
+        components.label(frame, 6, 0, "Image Variations",
                          tooltip="The number of different image versions to cache if latent caching is enabled.")
-        components.entry(frame, 5, 1, self.ui_state, "image_variations")
+        components.entry(frame, 6, 1, self.ui_state, "image_variations")
 
         # text variations
-        components.label(frame, 6, 0, "Text Variations",
+        components.label(frame, 7, 0, "Text Variations",
                          tooltip="The number of different text versions to cache if latent caching is enabled.")
-        components.entry(frame, 6, 1, self.ui_state, "text_variations")
+        components.entry(frame, 7, 1, self.ui_state, "text_variations")
 
         # balancing
-        components.label(frame, 7, 0, "Balancing",
+        components.label(frame, 8, 0, "Balancing",
                          tooltip="The number of samples used during training. Use repeats to multiply the concept, or samples to specify an exact number of samples used in each epoch.")
-        components.entry(frame, 7, 1, self.ui_state, "balancing")
-        components.options(frame, 7, 2, [str(x) for x in list(BalancingStrategy)], self.ui_state, "balancing_strategy")
+        components.entry(frame, 8, 1, self.ui_state, "balancing")
+        components.options(frame, 8, 2, [str(x) for x in list(BalancingStrategy)], self.ui_state, "balancing_strategy")
 
         # loss weight
-        components.label(frame, 8, 0, "Loss Weight",
+        components.label(frame, 9, 0, "Loss Weight",
                          tooltip="The loss multiplyer for this concept.")
-        components.entry(frame, 8, 1, self.ui_state, "loss_weight")
+        components.entry(frame, 9, 1, self.ui_state, "loss_weight")
 
         frame.pack(fill="both", expand=1)
         return frame
@@ -272,8 +278,50 @@ class ConceptWindow(ctk.CTkToplevel):
 
         # keep tag count
         components.label(frame, 2, 0, "Keep Tag Count",
-                         tooltip="The number of tags at the start of the caption that are not shuffled")
+                         tooltip="The number of tags at the start of the caption that are not shuffled or dropped")
         components.entry(frame, 2, 1, self.text_ui_state, "keep_tags_count")
+
+        # tag dropout
+        components.label(frame, 3, 0, "Tag Dropout",
+                         tooltip="Enables random dropout for tags in the captions.")
+        components.switch(frame, 3, 1, self.text_ui_state, "tag_dropout_enable")
+        components.label(frame, 4, 0, "Dropout Mode",
+                         tooltip="Method used to drop captions. 'Full' will drop the entire caption past the 'kept' tags with a certain probability, 'Random' will drop individual tags with the set probability, and 'Random Weighted' will linearly increase the probability of dropping tags, more likely to preseve tags near the front with full probability to drop at the end.")
+        components.options_kv(frame, 4, 1, [
+            ("Full", 'FULL'),
+            ("Random", 'RANDOM'),
+            ("Random Weighted", 'RANDOM WEIGHTED'),
+        ], self.text_ui_state, "tag_dropout_mode", None)
+        components.label(frame, 4, 2, "Probability",
+                         tooltip="Probability to drop tags, from 0 to 1.")
+        components.entry(frame, 4, 3, self.text_ui_state, "tag_dropout_probability")
+
+        components.label(frame, 5, 0, "Special Dropout Tags",
+                         tooltip="List of tags which will be whitelisted/blacklisted by dropout. 'Whitelist' tags will never be dropped but all others may be, 'Blacklist' tags may be dropped but all others will never be, 'None' may drop any tags. Can specify either a delimiter-separated list in the field, or a file path to a .txt or .csv file with entries separated by newlines.")
+        components.options_kv(frame, 5, 1, [
+            ("None", 'NONE'),
+            ("Blacklist", 'BLACKLIST'),
+            ("Whitelist", 'WHITELIST'),
+        ], self.text_ui_state, "tag_dropout_special_tags_mode", None)
+        components.entry(frame, 5, 2, self.text_ui_state, "tag_dropout_special_tags")
+        components.label(frame, 6, 0, "Special Tags Regex",
+                         tooltip="Interpret special tags with regex, such as 'photo.*' to match 'photo, photograph, photon' but not 'telephoto'. Includes exception for '/(' and '/)' syntax found in many booru/e6 tags.")
+        components.switch(frame, 6, 1, self.text_ui_state, "tag_dropout_special_tags_regex")
+
+        #capitalization randomization
+        components.label(frame, 7, 0, "Randomize Capitalization",
+                         tooltip="Enables randomization of capitalization for tags in the caption.")
+        components.switch(frame, 7, 1, self.text_ui_state, "caps_randomize_enable")
+        components.label(frame, 7, 2, "Force Lowercase",
+                         tooltip="If enabled, converts the caption to lowercase before any further processing.")
+        components.switch(frame, 7, 3, self.text_ui_state, "caps_randomize_lowercase")
+
+        components.label(frame, 8, 0, "Captialization Mode",
+                         tooltip="Comma-separated list of types of capitalization randomization to perform. 'capslock' for ALL CAPS, 'title' for First Letter Of Every Word, 'first' for First word only, 'random' for rAndOMiZeD lEtTERs.")
+        components.entry(frame, 8, 1, self.text_ui_state, "caps_randomize_mode")
+        components.label(frame, 8, 2, "Probability",
+                         tooltip="Probability to randomize capitialization of each tag, from 0 to 1.")
+        components.entry(frame, 8, 3, self.text_ui_state, "caps_randomize_probability")
 
         frame.pack(fill="both", expand=1)
         return frame
