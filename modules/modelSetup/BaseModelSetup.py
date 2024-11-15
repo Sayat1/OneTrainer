@@ -98,7 +98,7 @@ class BaseModelSetup(
             schedulers: list[LRScheduler],
             tensorboard: SummaryWriter,
     ) -> dict[str,float]:
-        lrs = [scheduler.get_last_lr() for scheduler in schedulers]
+        lrs = [scheduler.get_last_lr()[0] for scheduler in schedulers]
         parameters = model.parameters.display_name_mapping
 
         reported_learning_rates = {}
