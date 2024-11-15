@@ -617,7 +617,7 @@ class GenericTrainer(BaseTrainer):
         # This is used to schedule sampling only when the gradients don't take up any space
         has_gradient = False
 
-        lr_scheduler = None
+        lr_schedulers = []
         accumulated_loss = 0.0
         ema_loss = None
         for _epoch in tqdm(range(train_progress.epoch, self.config.epochs, 1),position=0,file=sys.stdout,leave=True ,desc="epoch"):
@@ -640,20 +640,21 @@ class GenericTrainer(BaseTrainer):
 
             torch_gc()
 
-            if lr_scheduler is None:
-                lr_scheduler = create.create_lr_scheduler(
-                    config=self.config,
-                    optimizer=self.model.optimizers[0],
-                    learning_rate_scheduler=self.config.learning_rate_scheduler,
-                    warmup_steps=self.config.learning_rate_warmup_steps,
-                    num_cycles=self.config.learning_rate_cycles,
-                    num_epochs=self.config.epochs,
-                    approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
-                    batch_size=self.config.batch_size,
-                    gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    global_step=train_progress.global_step,
-                    eta_min=self.config.learning_rate_min,
-                )
+            if lr_schedulers is None or len(lr_schedulers) == 0:
+                for optimizer in self.model.optimizers:
+                    lr_schedulers.append(create.create_lr_scheduler(
+                        config=self.config,
+                        optimizer=optimizer,
+                        learning_rate_scheduler=self.config.learning_rate_scheduler,
+                        warmup_steps=self.config.learning_rate_warmup_steps,
+                        num_cycles=self.config.learning_rate_cycles,
+                        num_epochs=self.config.epochs,
+                        approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
+                        batch_size=self.config.batch_size,
+                        gradient_accumulation_steps=self.config.gradient_accumulation_steps,
+                        global_step=train_progress.global_step,
+                        eta_min=self.config.learning_rate_min,
+                    ))
 
             current_epoch_length = self.data_loader.get_data_set().approximate_length()
             step_tqdm = tqdm(self.data_loader.get_data_loader(), desc="step",position=0, file=sys.stdout, total=current_epoch_length,
@@ -734,11 +735,11 @@ class GenericTrainer(BaseTrainer):
                                 nn.utils.clip_grad_norm_(self.parameters, self.config.clip_grad_norm)
                             [optimizer.step() for optimizer in self.model.optimizers]
 
-                        lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
+                        [lr_scheduler.step() for lr_scheduler in lr_schedulers]  # done before zero_grad, because some lr schedulers need gradients
                         [optimizer.zero_grad(set_to_none=True) for optimizer in self.model.optimizers]
                         has_gradient = False
                         reported_lr = self.model_setup.report_to_tensorboard(
-                            self.model, self.config, lr_scheduler, self.tensorboard
+                            self.model, self.config, lr_schedulers, self.tensorboard
                         )
 
                         self.tensorboard.add_scalar("loss/train_step", accumulated_loss, train_progress.global_step)
