@@ -559,7 +559,7 @@ class TrainConfig(BaseConfig):
     def __migration_4(self, data: dict) -> dict:
         migrated_data = data.copy()
 
-        gradient_checkpointing = migrated_data.pop("gradient_checkpointing")
+        gradient_checkpointing = migrated_data.pop("gradient_checkpointing", True)
 
         if gradient_checkpointing:
             migrated_data["gradient_checkpointing"] = GradientCheckpointingMethod.ON
@@ -571,8 +571,10 @@ class TrainConfig(BaseConfig):
     def __migration_5(self, data: dict) -> dict:
         migrated_data = data.copy()
 
-        migrated_data["save_every"] = migrated_data.pop("save_after")
-        migrated_data["save_every_unit"] = migrated_data.pop("save_after_unit")
+        if "save_after" in migrated_data:
+            migrated_data["save_every"] = migrated_data.pop("save_after")
+        if "save_after_unit" in migrated_data:
+            migrated_data["save_every_unit"] = migrated_data.pop("save_after_unit")
 
         return migrated_data
 
@@ -720,7 +722,7 @@ class TrainConfig(BaseConfig):
         data.append(("scheduler_params", [], list[dict[str, str]], True))
         data.append(("learning_rate", 3e-6, float, False))
         data.append(("learning_rate_warmup_steps", 200, float, False))
-        data.append(("learning_rate_cycles", 1, int, False))
+        data.append(("learning_rate_cycles", 1, float, False))
         data.append(("learning_rate_min", 0.0, float, False))
         data.append(("epochs", 100, int, False))
         data.append(("batch_size", 1, int, False))

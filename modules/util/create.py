@@ -1058,7 +1058,7 @@ def create_lr_scheduler(
         config: TrainConfig,
         optimizer: torch.optim.Optimizer,
         learning_rate_scheduler: LearningRateScheduler,
-        warmup_steps: float,
+        warmup_steps: int | float,
         num_cycles: float,
         num_epochs: int,
         batch_size: int,

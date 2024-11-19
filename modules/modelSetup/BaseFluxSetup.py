@@ -357,7 +357,7 @@ class BaseFluxSetup(
                 # negative_added_cond_kwargs = {"text_embeds": negative_pooled_text_encoder_2_output,
                 #                               "time_ids": add_time_ids}
 
-                # checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device, self.temp_device)
+                # checkpointed_unet = create_checkpointed_forward(model.unet, self.train_device)
 
                 # for step in range(config.align_prop_steps):
                 #     timestep = model.noise_scheduler.timesteps[step] \
@@ -423,7 +423,7 @@ class BaseFluxSetup(
                 #     'loss_type': 'align_prop',
                 #     'predicted': predicted_image,
                 # }
-            timestep_index = self._get_timestep_discrete(
+            timestep = self._get_timestep_discrete(
                 model.noise_scheduler.config['num_train_timesteps'],
                 deterministic,
                 generator,
@@ -431,10 +431,10 @@ class BaseFluxSetup(
                 config,
             )
 
-            scaled_noisy_latent_image, timestep, sigma = self._add_noise_discrete(
+            scaled_noisy_latent_image, sigma = self._add_noise_discrete(
                 scaled_latent_image,
                 latent_noise,
-                timestep_index,
+                timestep,
                 model.noise_scheduler.timesteps,
             )
 
