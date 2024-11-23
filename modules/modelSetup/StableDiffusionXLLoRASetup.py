@@ -121,6 +121,7 @@ class StableDiffusionXLLoRASetup(
     ):
         create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te1")
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
+        create_unet = config.unet.train or state_dict_has_prefix(model.lora_state_dict, "lora_unet")
 
         model.text_encoder_1_lora = LoRAModuleWrapper(
             model.text_encoder_1, "lora_te1", config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
@@ -139,8 +140,8 @@ class StableDiffusionXLLoRASetup(
                 model.text_encoder_1_lora.load_state_dict(model.lora_state_dict)
             if create_te2:
                 model.text_encoder_2_lora.load_state_dict(model.lora_state_dict)
-
-            model.unet_lora.load_state_dict(model.lora_state_dict)
+            if create_unet:
+                model.unet_lora.load_state_dict(model.lora_state_dict)
             model.lora_state_dict = None
 
         if config.text_encoder.train:
@@ -155,9 +156,9 @@ class StableDiffusionXLLoRASetup(
         if create_te2:
             model.text_encoder_2_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
             model.text_encoder_2_lora.hook_to_module()
-
-        model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
-        model.unet_lora.hook_to_module()
+        if create_unet:
+            model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
+            model.unet_lora.hook_to_module()
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
