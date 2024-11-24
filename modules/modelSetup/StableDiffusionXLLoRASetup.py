@@ -133,7 +133,7 @@ class StableDiffusionXLLoRASetup(
 
         model.unet_lora = LoRAModuleWrapper(
             model.unet, "lora_unet", config, config.lora_layers.split(",")
-        )
+        ) if create_unet else None
 
         if model.lora_state_dict:
             if create_te1:
@@ -148,7 +148,8 @@ class StableDiffusionXLLoRASetup(
             model.text_encoder_1_lora.set_dropout(config.dropout_probability)
         if config.text_encoder_2.train:
             model.text_encoder_2_lora.set_dropout(config.dropout_probability)
-        model.unet_lora.set_dropout(config.dropout_probability)
+        if config.unet.train:
+            model.unet_lora.set_dropout(config.dropout_probability)
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
