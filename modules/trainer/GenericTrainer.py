@@ -640,11 +640,18 @@ class GenericTrainer(BaseTrainer):
 
             torch_gc()
 
+            lr_schedulers = []
+            if self.config.text_encoder.train:
+                lr_schedulers.append(self.config.te1_learning_rate_scheduler if self.config.te1_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
+            if self.config.text_encoder_2.train:
+                lr_schedulers.append(self.config.te2_learning_rate_scheduler if self.config.te2_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
+            if self.config.unet.train:
+                lr_schedulers.append(self.config.learning_rate_schedu)
             if lr_scheduler is None:
                 lr_scheduler = create.create_lr_scheduler(
                     config=self.config,
                     optimizer=self.model.optimizer,
-                    learning_rate_scheduler=self.config.learning_rate_scheduler,
+                    learning_rate_scheduler=lr_schedulers,
                     warmup_steps=self.config.learning_rate_warmup_steps,
                     num_cycles=self.config.learning_rate_cycles,
                     num_epochs=self.config.epochs,
