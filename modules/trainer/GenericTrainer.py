@@ -646,7 +646,7 @@ class GenericTrainer(BaseTrainer):
             if self.config.text_encoder_2.train:
                 lr_schedulers.append(self.config.te2_learning_rate_scheduler if self.config.te2_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
             if self.config.unet.train:
-                lr_schedulers.append(self.config.learning_rate_schedu)
+                lr_schedulers.append(self.config.learning_rate_scheduler)
             if lr_scheduler is None:
                 lr_scheduler = create.create_lr_scheduler(
                     config=self.config,
