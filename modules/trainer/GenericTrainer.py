@@ -199,6 +199,11 @@ class GenericTrainer(BaseTrainer):
                     print(f"Deleting old backup {str(dirpath)}")
                     path_dir = Path(dirpath)
                     newpath_dir = path_dir.rename(f"/content/drive/MyDrive/{path_dir.name}/")
+                    old_backup_files = newpath_dir.rglob("*.*")
+                    for old_file in old_backup_files:
+                        if Path(old_file).is_file():
+                            path_util.collab_delete_file(old_file)
+                    shutil.rmtree(newpath_dir)
             except Exception as e:
                 print(f"Could not delete old rolling backup {dirpath}")
 
