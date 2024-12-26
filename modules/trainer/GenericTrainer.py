@@ -448,7 +448,7 @@ class GenericTrainer(BaseTrainer):
         if os.path.isfile(self.config.sample_definition_file_name):
             shutil.copy2(self.config.sample_definition_file_name, samples_path)
 
-    def backup(self, train_progress: TrainProgress):
+    def backup(self, train_progress: TrainProgress, print_msg: bool = True, print_cb: Callable[[str], None] = print):
         torch_gc()
 
         self.callbacks.on_update_status("creating backup")
@@ -462,7 +462,8 @@ class GenericTrainer(BaseTrainer):
             self.model.optimizer.eval()
 
         try:
-            print("Creating Backup " + backup_path)
+            if print_msg:
+                print_cb("Creating Backup " + backup_path)
 
             self.model_saver.save(
                 self.model,
@@ -494,13 +495,14 @@ class GenericTrainer(BaseTrainer):
 
         torch_gc()
 
-    def save(self, train_progress: TrainProgress):
+    def save(self, train_progress: TrainProgress, print_msg: bool = True, print_cb: Callable[[str], None] = print):
         torch_gc()
 
         self.callbacks.on_update_status("saving")
         output_model_destination_path = Path(self.config.output_model_destination )
         save_path = str(output_model_destination_path.parent / f"{self.config.save_filename_prefix}{output_model_destination_path.stem}-{train_progress.filename_string()}{self.config.output_model_format.file_extension()}")
-        print("Saving " + save_path)
+        if print_msg:
+            print_cb("Saving " + save_path)
 
         try:
             if self.model.ema:
@@ -702,12 +704,12 @@ class GenericTrainer(BaseTrainer):
 
                     if self.commands.get_and_reset_backup_command():
                         self.model.to(self.temp_device)
-                        self.backup(train_progress)
+                        self.backup(train_progress, True, step_tqdm.write)
                         transferred_to_temp_device = True
 
                     if self.commands.get_and_reset_save_command():
                         self.model.to(self.temp_device)
-                        self.save(train_progress)
+                        self.save(train_progress, True, step_tqdm.write)
                         transferred_to_temp_device = True
 
                     if transferred_to_temp_device:
