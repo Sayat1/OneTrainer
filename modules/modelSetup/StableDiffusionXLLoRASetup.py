@@ -150,7 +150,7 @@ class StableDiffusionXLLoRASetup(
         self._setup_additional_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
-        init_model_parameters(model, self.create_parameters(model, config))
+        init_model_parameters(model, self.create_parameters(model, config),train_device=self.train_device)
 
         self._setup_optimizations(model, config)
 
