@@ -36,14 +36,13 @@ class StableDiffusionXLLoRAModelLoader(
             self,
             model_type: ModelType,
             model_names: ModelNames,
-            weight_dtypes: ModelWeightDtypes,
-            train_config: TrainConfig
+            weight_dtypes: ModelWeightDtypes
     ) -> StableDiffusionXLModel | None:
         base_model_loader = StableDiffusionXLModelLoader()
         lora_model_loader = StableDiffusionXLLoRALoader()
         embedding_loader = StableDiffusionXLEmbeddingLoader()
 
-        model = StableDiffusionXLModel(model_type=model_type,train_config=train_config)
+        model = StableDiffusionXLModel(model_type=model_type)
         self._load_internal_data(model, model_names.lora)
         model.model_spec = self._load_default_model_spec(model_type)
 
