@@ -3,6 +3,9 @@ from modules.util import create
 from modules.util.config.TrainConfig import TrainConfig, TrainOptimizerConfig
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
+from modules.util.torch_util import optimizer_to_device_
+
+import torch
 
 
 def change_optimizer(train_config: TrainConfig) -> TrainOptimizerConfig:
@@ -47,10 +50,13 @@ def update_optimizer_config(train_config: TrainConfig):
 def init_model_parameters(
         model: BaseModel,
         parameters: NamedParameterGroupCollection,
+        train_device: torch.device,
 ):
     model.parameters = parameters
 
     model.optimizer = create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config)
+    if model.optimizer is not None:
+        optimizer_to_device_(model.optimizer, train_device)
     model.optimizer_state_dict = None
 
     model.ema = create.create_ema(parameters.parameters(), model.ema_state_dict, model.train_config)
@@ -118,6 +124,36 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "percentile_clipping": 100,
         "block_wise": True,
         "is_paged": False,
+    },
+    Optimizer.AdEMAMix_8BIT: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "min_8bit_size": 4096,
+        "is_paged": False,
+    },
+    Optimizer.AdEMAMix: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "optim_bits": 32,
+        "min_8bit_size": 4096,
+        "is_paged": False,
+    },
+    Optimizer.ADOPT: {
+        "beta1": 0.9,
+        "beta2": 0.9999,
+        "weight_decay": 0.0,
+        "decoupled_decay": False,
+        "fixed_decay": False,
+        "cautious": False,
+        "eps": 1e-6,
     },
     Optimizer.LAMB: {
         "bias_correction": True,
@@ -233,6 +269,7 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "d_coef": 1.0,
         "growth_rate": float('inf'),
         "fsdp_in_use": False,
+        "slice_p": 11,
     },
     Optimizer.DADAPT_ADA_GRAD: {
         "momentum": 0,

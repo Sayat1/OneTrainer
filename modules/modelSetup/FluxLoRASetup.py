@@ -24,7 +24,7 @@ class FluxLoRASetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(FluxLoRASetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -127,12 +127,12 @@ class FluxLoRASetup(
 
         if model.text_encoder_1 is not None:
             model.text_encoder_1_lora = LoRAModuleWrapper(
-                model.text_encoder_1, "lora_te1", config
+                model.text_encoder_1, "lora_te1", config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
             ) if create_te1 else None
 
         if model.text_encoder_2 is not None:
             model.text_encoder_2_lora = LoRAModuleWrapper(
-                model.text_encoder_2, "lora_te2", config
+                model.text_encoder_2, "lora_te2", config, config.lora_layers.split(",") if len(config.lora_layers)>0 else ["text_model"]
             ) if create_te2 else None
 
         model.transformer_lora = LoRAModuleWrapper(
@@ -173,9 +173,7 @@ class FluxLoRASetup(
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self._setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,

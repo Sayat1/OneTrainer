@@ -1,5 +1,5 @@
+import contextlib
 import os
-import traceback
 
 from modules.model.PixArtAlphaModel import PixArtAlphaModel
 from modules.util.ModelNames import EmbeddingName, ModelNames
@@ -12,7 +12,7 @@ from safetensors.torch import load_file
 
 class PixArtAlphaEmbeddingLoader:
     def __init__(self):
-        super(PixArtAlphaEmbeddingLoader, self).__init__()
+        super().__init__()
 
     def __load_embedding(
             self,
@@ -21,23 +21,19 @@ class PixArtAlphaEmbeddingLoader:
         if embedding_name == "":
             return None
 
-        try:
-            embedding_state = torch.load(embedding_name)
+        with contextlib.suppress(Exception):
+            embedding_state = torch.load(embedding_name, weights_only=True)
 
             prior_text_encoder_vector = embedding_state['t5']
 
             return prior_text_encoder_vector
-        except:
-            pass
 
-        try:
+        with contextlib.suppress(Exception):
             embedding_state = load_file(embedding_name)
 
             prior_text_encoder_vector = embedding_state['t5']
 
             return prior_text_encoder_vector
-        except:
-            pass
 
         raise Exception(f"could not load embedding: {embedding_name}")
 
@@ -76,45 +72,27 @@ class PixArtAlphaEmbeddingLoader:
         model.additional_embedding_states = []
 
         for embedding_name in model_names.additional_embeddings:
-            stacktraces = []
-
             try:
                 model.additional_embedding_states.append(self.__load_internal(model_names.base_model, embedding_name, False))
-                continue
-            except:
+            except Exception as e1:  # noqa: PERF203
                 try:
                     model.additional_embedding_states.append(self.__load_embedding(embedding_name.model_name))
-                    continue
-                except:
-                    stacktraces.append(traceback.format_exc())
-
-                stacktraces.append(traceback.format_exc())
-
-                for stacktrace in stacktraces:
-                    print(stacktrace)
-                raise Exception("could not load embedding: " + str(model_names.embedding))
+                except Exception as e2:
+                    e2.__cause__ = e1
+                    raise Exception(f"could not load embedding: {embedding_name}") from e2
 
     def load_single(
             self,
             model: PixArtAlphaModel,
             model_names: ModelNames,
     ):
-        stacktraces = []
-
         embedding_name = model_names.embedding
 
         try:
             model.embedding_state = self.__load_internal(model_names.embedding.model_name, embedding_name, True)
-            return
-        except:
-            stacktraces.append(traceback.format_exc())
-
+        except Exception as e1:
             try:
                 model.embedding_state = self.__load_embedding(embedding_name.model_name)
-                return
-            except:
-                stacktraces.append(traceback.format_exc())
-
-        for stacktrace in stacktraces:
-            print(stacktrace)
-        raise Exception("could not load embedding: " + str(model_names.embedding))
+            except Exception as e2:
+                e2.__cause__ = e1
+                raise Exception(f"could not load embedding: {embedding_name}") from e2

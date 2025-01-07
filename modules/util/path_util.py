@@ -17,6 +17,15 @@ def safe_filename(
 
     return text.strip()
 
+def collab_delete_file(file_path:str):
+    try:
+        with open(str(file_path),'w') as f:
+            pass
+        os.remove(str(file_path))
+        return True
+    except Exception:
+        print(f"Could not delete file :{file_path}")
+        return False
 
 def canonical_join(base_path: str, *paths: str):
     # Creates a canonical path name that can be used for comparisons.
@@ -26,9 +35,11 @@ def canonical_join(base_path: str, *paths: str):
     return joined.replace('\\', '/')
 
 
-def supported_image_extensions() -> list[str]:
-    return ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp']
+SUPPORTED_IMAGE_EXTENSIONS = {'.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp'}
+
+def supported_image_extensions() -> set[str]:
+    return SUPPORTED_IMAGE_EXTENSIONS
 
 
 def is_supported_image_extension(extension: str) -> bool:
-    return extension.lower() in supported_image_extensions()
+    return extension.lower() in SUPPORTED_IMAGE_EXTENSIONS

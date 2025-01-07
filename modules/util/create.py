@@ -2,10 +2,12 @@ import ast
 import importlib
 import inspect
 from typing import Iterable
+from collections.abc import Iterable
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
 from modules.dataLoader.FluxBaseDataLoader import FluxBaseDataLoader
 from modules.dataLoader.PixArtAlphaBaseDataLoader import PixArtAlphaBaseDataLoader
+from modules.dataLoader.SanaBaseDataLoader import SanaBaseDataLoader
 from modules.dataLoader.StableDiffusion3BaseDataLoader import StableDiffusion3BaseDataLoader
 from modules.dataLoader.StableDiffusionBaseDataLoader import StableDiffusionBaseDataLoader
 from modules.dataLoader.StableDiffusionFineTuneVaeDataLoader import StableDiffusionFineTuneVaeDataLoader
@@ -19,6 +21,9 @@ from modules.modelLoader.FluxLoRAModelLoader import FluxLoRAModelLoader
 from modules.modelLoader.PixArtAlphaEmbeddingModelLoader import PixArtAlphaEmbeddingModelLoader
 from modules.modelLoader.PixArtAlphaFineTuneModelLoader import PixArtAlphaFineTuneModelLoader
 from modules.modelLoader.PixArtAlphaLoRAModelLoader import PixArtAlphaLoRAModelLoader
+from modules.modelLoader.SanaEmbeddingModelLoader import SanaEmbeddingModelLoader
+from modules.modelLoader.SanaFineTuneModelLoader import SanaFineTuneModelLoader
+from modules.modelLoader.SanaLoRAModelLoader import SanaLoRAModelLoader
 from modules.modelLoader.StableDiffusion3EmbeddingModelLoader import StableDiffusion3EmbeddingModelLoader
 from modules.modelLoader.StableDiffusion3FineTuneModelLoader import StableDiffusion3FineTuneModelLoader
 from modules.modelLoader.StableDiffusion3LoRAModelLoader import StableDiffusion3LoRAModelLoader
@@ -34,6 +39,7 @@ from modules.modelLoader.WuerstchenLoRAModelLoader import WuerstchenLoRAModelLoa
 from modules.modelSampler import BaseModelSampler
 from modules.modelSampler.FluxSampler import FluxSampler
 from modules.modelSampler.PixArtAlphaSampler import PixArtAlphaSampler
+from modules.modelSampler.SanaSampler import SanaSampler
 from modules.modelSampler.StableDiffusion3Sampler import StableDiffusion3Sampler
 from modules.modelSampler.StableDiffusionSampler import StableDiffusionSampler
 from modules.modelSampler.StableDiffusionVaeSampler import StableDiffusionVaeSampler
@@ -46,6 +52,9 @@ from modules.modelSaver.FluxLoRAModelSaver import FluxLoRAModelSaver
 from modules.modelSaver.PixArtAlphaEmbeddingModelSaver import PixArtAlphaEmbeddingModelSaver
 from modules.modelSaver.PixArtAlphaFineTuneModelSaver import PixArtAlphaFineTuneModelSaver
 from modules.modelSaver.PixArtAlphaLoRAModelSaver import PixArtAlphaLoRAModelSaver
+from modules.modelSaver.SanaEmbeddingModelSaver import SanaEmbeddingModelSaver
+from modules.modelSaver.SanaFineTuneModelSaver import SanaFineTuneModelSaver
+from modules.modelSaver.SanaLoRAModelSaver import SanaLoRAModelSaver
 from modules.modelSaver.StableDiffusion3EmbeddingModelSaver import StableDiffusion3EmbeddingModelSaver
 from modules.modelSaver.StableDiffusion3FineTuneModelSaver import StableDiffusion3FineTuneModelSaver
 from modules.modelSaver.StableDiffusion3LoRAModelSaver import StableDiffusion3LoRAModelSaver
@@ -65,6 +74,9 @@ from modules.modelSetup.FluxLoRASetup import FluxLoRASetup
 from modules.modelSetup.PixArtAlphaEmbeddingSetup import PixArtAlphaEmbeddingSetup
 from modules.modelSetup.PixArtAlphaFineTuneSetup import PixArtAlphaFineTuneSetup
 from modules.modelSetup.PixArtAlphaLoRASetup import PixArtAlphaLoRASetup
+from modules.modelSetup.SanaEmbeddingSetup import SanaEmbeddingSetup
+from modules.modelSetup.SanaFineTuneSetup import SanaFineTuneSetup
+from modules.modelSetup.SanaLoRASetup import SanaLoRASetup
 from modules.modelSetup.StableDiffusion3EmbeddingSetup import StableDiffusion3EmbeddingSetup
 from modules.modelSetup.StableDiffusion3FineTuneSetup import StableDiffusion3FineTuneSetup
 from modules.modelSetup.StableDiffusion3LoRASetup import StableDiffusion3LoRASetup
@@ -86,7 +98,15 @@ from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.enum.TrainingMethod import TrainingMethod
-from modules.util.lr_scheduler_util import *
+from modules.util.lr_scheduler_util import (
+    lr_lambda_constant,
+    lr_lambda_cosine,
+    lr_lambda_cosine_with_hard_restarts,
+    lr_lambda_cosine_with_restarts,
+    lr_lambda_linear,
+    lr_lambda_rex,
+    lr_lambda_warmup,
+)
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer.adafactor_extensions import patch_adafactor
 from modules.util.optimizer.adam_extensions import patch_adam
@@ -125,6 +145,8 @@ def create_model_loader(
                 return StableDiffusion3FineTuneModelLoader()
             if model_type.is_flux():
                 return FluxFineTuneModelLoader()
+            if model_type.is_sana():
+                return SanaFineTuneModelLoader()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelLoader()
@@ -141,6 +163,8 @@ def create_model_loader(
                 return StableDiffusion3LoRAModelLoader()
             if model_type.is_flux():
                 return FluxLoRAModelLoader()
+            if model_type.is_sana():
+                return SanaLoRAModelLoader()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelLoader()
@@ -154,6 +178,8 @@ def create_model_loader(
                 return StableDiffusion3EmbeddingModelLoader()
             if model_type.is_flux():
                 return FluxEmbeddingModelLoader()
+            if model_type.is_sana():
+                return SanaEmbeddingModelLoader()
 
     return None
 
@@ -176,6 +202,8 @@ def create_model_saver(
                 return StableDiffusion3FineTuneModelSaver()
             if model_type.is_flux():
                 return FluxFineTuneModelSaver()
+            if model_type.is_sana():
+                return SanaFineTuneModelSaver()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelSaver()
@@ -192,6 +220,8 @@ def create_model_saver(
                 return StableDiffusion3LoRAModelSaver()
             if model_type.is_flux():
                 return FluxLoRAModelSaver()
+            if model_type.is_sana():
+                return SanaLoRAModelSaver()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelSaver()
@@ -205,8 +235,11 @@ def create_model_saver(
                 return StableDiffusion3EmbeddingModelSaver()
             if model_type.is_flux():
                 return FluxEmbeddingModelSaver()
+            if model_type.is_sana():
+                return SanaEmbeddingModelSaver()
 
     return None
+
 
 def create_model_setup(
         model_type: ModelType,
@@ -229,6 +262,8 @@ def create_model_setup(
                 return StableDiffusion3FineTuneSetup(train_device, temp_device, debug_mode)
             if model_type.is_flux():
                 return FluxFineTuneSetup(train_device, temp_device, debug_mode)
+            if model_type.is_sana():
+                return SanaFineTuneSetup(train_device, temp_device, debug_mode)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneVaeSetup(train_device, temp_device, debug_mode)
@@ -245,6 +280,8 @@ def create_model_setup(
                 return StableDiffusion3LoRASetup(train_device, temp_device, debug_mode)
             if model_type.is_flux():
                 return FluxLoRASetup(train_device, temp_device, debug_mode)
+            if model_type.is_sana():
+                return SanaLoRASetup(train_device, temp_device, debug_mode)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingSetup(train_device, temp_device, debug_mode)
@@ -258,8 +295,11 @@ def create_model_setup(
                 return StableDiffusion3EmbeddingSetup(train_device, temp_device, debug_mode)
             if model_type.is_flux():
                 return FluxEmbeddingSetup(train_device, temp_device, debug_mode)
+            if model_type.is_sana():
+                return SanaEmbeddingSetup(train_device, temp_device, debug_mode)
 
     return None
+
 
 def create_model_sampler(
         train_device: torch.device,
@@ -282,6 +322,8 @@ def create_model_sampler(
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
             if model_type.is_flux():
                 return FluxSampler(train_device, temp_device, model, model_type)
+            if model_type.is_sana():
+                return SanaSampler(train_device, temp_device, model, model_type)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionVaeSampler(train_device, temp_device, model, model_type)
@@ -298,6 +340,8 @@ def create_model_sampler(
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
             if model_type.is_flux():
                 return FluxSampler(train_device, temp_device, model, model_type)
+            if model_type.is_sana():
+                return SanaSampler(train_device, temp_device, model, model_type)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionSampler(train_device, temp_device, model, model_type)
@@ -311,8 +355,11 @@ def create_model_sampler(
                 return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
             if model_type.is_flux():
                 return FluxSampler(train_device, temp_device, model, model_type)
+            if model_type.is_sana():
+                return SanaSampler(train_device, temp_device, model, model_type)
 
     return None
+
 
 def create_data_loader(
         train_device: torch.device,
@@ -321,11 +368,17 @@ def create_data_loader(
         model_type: ModelType,
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
         config: TrainConfig = None,
-        train_progress: TrainProgress = TrainProgress(),
+        train_progress: TrainProgress | None = None,
         is_validation: bool = False
 ) -> BaseDataLoader | None:
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0 and config.dataloader_threads > 1:
+        raise RuntimeError('layer offloading can not be activated if "dataloader_threads" > 1')
+
+    if train_progress is None:
+        train_progress = TrainProgress()
+
     match training_method:
-        case TrainingMethod.FINE_TUNE:
+        case TrainingMethod.FINE_TUNE | TrainingMethod.LORA | TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_stable_diffusion_xl():
@@ -338,45 +391,30 @@ def create_data_loader(
                 return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_flux():
                 return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+            if model_type.is_sana():
+                return SanaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneVaeDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-        case TrainingMethod.LORA:
-            if model_type.is_stable_diffusion():
-                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_wuerstchen():
-                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_pixart():
-                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_stable_diffusion_3():
-                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_flux():
-                return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-        case TrainingMethod.EMBEDDING:
-            if model_type.is_stable_diffusion():
-                return StableDiffusionBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_wuerstchen():
-                return WuerstchenBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_pixart():
-                return PixArtAlphaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_stable_diffusion_3():
-                return StableDiffusion3BaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
-            if model_type.is_flux():
-                return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
 
     return None
+
 
 def create_optimizer(
         parameter_group_collection: NamedParameterGroupCollection,
         state_dict: dict | None,
         config: TrainConfig,
-) -> torch.optim.Optimizer:
+) -> torch.optim.Optimizer | None:
     optimizer = None
     optimizer_config = config.optimizer
+
+    if optimizer_config.optimizer is None:
+        return None
+
+    if config.gradient_checkpointing.offload() and config.layer_offload_fraction > 0:
+        if (not optimizer_config.optimizer.supports_fused_back_pass() or not optimizer_config.fused_back_pass) \
+                and config.training_method == TrainingMethod.FINE_TUNE:
+            raise RuntimeError('layer offloading can only be used for fine tuning when using an optimizer that supports "fused_back_pass"')
 
     parameters = parameter_group_collection.parameters_for_optimizer(config)
     match config.optimizer.optimizer:
@@ -499,6 +537,39 @@ def create_optimizer(
                 block_wise=optimizer_config.block_wise if optimizer_config.block_wise is not None else True,
                 is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
                 **optimizer_config.extra
+            )
+
+        # AdEMAMix_8BIT Optimizer
+        case Optimizer.AdEMAMix_8BIT:
+            import bitsandbytes as bnb
+            optimizer = bnb.optim.AdEMAMix8bit(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999,
+                       optimizer_config.beta3 if optimizer_config.beta1 is not None else 0.9999,),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 5,
+                min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
+                is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
+            )
+
+        # AdEMAMix Optimizer
+        case Optimizer.AdEMAMix:
+            import bitsandbytes as bnb
+            optimizer = bnb.optim.AdEMAMix(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.999,
+                       optimizer_config.beta3 if optimizer_config.beta1 is not None else 0.9999,),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 1e-2,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+                alpha=optimizer_config.alpha if optimizer_config.alpha is not None else 5,
+                optim_bits=optimizer_config.optim_bits if optimizer_config.optim_bits is not None else 32,
+                min_8bit_size=optimizer_config.min_8bit_size if optimizer_config.min_8bit_size is not None else 4096,
+                is_paged=optimizer_config.is_paged if optimizer_config.is_paged is not None else False,
             )
 
         # ADAGRAD Optimizer
@@ -791,6 +862,7 @@ def create_optimizer(
                 d_coef=optimizer_config.d_coef if optimizer_config.d_coef is not None else 1.0,
                 growth_rate=optimizer_config.growth_rate if optimizer_config.growth_rate is not None else float('inf'),
                 fsdp_in_use=optimizer_config.fsdp_in_use if optimizer_config.fsdp_in_use is not None else False,
+                slice_p=optimizer_config.slice_p if optimizer_config.slice_p is not None else 1,
                 **optimizer_config.extra
             )
 
@@ -805,7 +877,7 @@ def create_optimizer(
 
             optimizer = Adafactor(
                 params=parameters,
-                lr=None if optimizer_config.relative_step == True else config.learning_rate,
+                lr=None if optimizer_config.relative_step is True else config.learning_rate,
                 eps=(optimizer_config.eps if optimizer_config.eps is not None else 1e-30,
                      optimizer_config.eps2 if optimizer_config.eps2 is not None else 1e-3),
                 clip_threshold=optimizer_config.clip_threshold if optimizer_config.clip_threshold is not None else 1.0,
@@ -887,6 +959,33 @@ def create_optimizer(
                 adam_debias=optimizer_config.adam_debias if optimizer_config.adam_debias is not None else False,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
             )
+        
+        case Optimizer.SOAP:
+            from pytorch_optimizer.optimizer.soap import SOAP
+            optimizer = SOAP(
+                params=parameters,
+                lr=config.learning_rate if config.learning_rate is not None else 0,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.95,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.95),
+                **optimizer_config.extra
+            )
+
+
+        case Optimizer.ADOPT:
+            from pytorch_optimizer.optimizer.adopt import ADOPT
+            optimizer = ADOPT(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.9999),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                weight_decouple=optimizer_config.decoupled_decay if optimizer_config.decoupled_decay is not None else False,
+                fixed_decay=optimizer_config.fixed_decay if optimizer_config.fixed_decay is not None else False,
+                cautious=optimizer_config.cautious if optimizer_config.cautious is not None else False,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-6,
+            )
+
 
     if state_dict is not None and optimizer is not None:
         if 'param_group_mapping' not in state_dict:
@@ -927,9 +1026,8 @@ def create_optimizer(
                 else:
                     # the group state was not saved, initialize with an empty group state
                     new_group = new_param_groups[new_group_index]
-                    for i, old_state_index in enumerate(new_group['params']):
-                        new_group['params'][i] = state_index
-                        state_index += 1
+                    new_group['params'][:] = range(state_index, state_index + len(new_group['params']))
+                    state_index += len(new_group['params'])
                     param_groups.append(new_group)
 
             state_dict['state'] = state
@@ -984,8 +1082,8 @@ def create_ema(
 def create_lr_scheduler(
         config: TrainConfig,
         optimizer: torch.optim.Optimizer,
-        learning_rate_scheduler: LearningRateScheduler,
-        warmup_steps: int,
+        learning_rate_schedulers: list[LearningRateScheduler],
+        warmup_steps: int | float,
         num_cycles: float,
         num_epochs: int,
         batch_size: int,
@@ -996,100 +1094,111 @@ def create_lr_scheduler(
 ) -> LRScheduler:
     steps_per_epoch = approximate_epoch_length
     total_steps = int(steps_per_epoch * num_epochs / gradient_accumulation_steps)
-    warmup_steps = int(warmup_steps / gradient_accumulation_steps)
+
+    if warmup_steps > 1:   #values > 1 are literal step count
+        warmup_steps = int(warmup_steps / gradient_accumulation_steps)
+    elif 0 < warmup_steps <= 1:  #values between 0-1 are treated as percentage
+        warmup_steps = int(warmup_steps * total_steps)
+    else:   #catch any invalid inputs or negative values
+        warmup_steps = 0
+
     scheduler_steps = total_steps - warmup_steps
+    lr_lambdas = []
 
-    # Force schedule-free algorithms to constant schedule.
-    if config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper:
-        learning_rate_scheduler = LearningRateScheduler.CONSTANT
+    for learning_rate_scheduler in learning_rate_schedulers:
+        # Force schedule-free algorithms to constant schedule.
+        if config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper:
+            learning_rate_scheduler = LearningRateScheduler.CONSTANT
 
-    match learning_rate_scheduler:
-        case LearningRateScheduler.CONSTANT:
-            lr_lambda = lr_lambda_constant()
+        match learning_rate_scheduler:
+            case LearningRateScheduler.CONSTANT:
+                lr_lambda = lr_lambda_constant()
 
-        case LearningRateScheduler.LINEAR:
-            lr_lambda = lr_lambda_linear(
-                scheduler_steps
-            )
+            case LearningRateScheduler.LINEAR:
+                lr_lambda = lr_lambda_linear(
+                    scheduler_steps
+                )
 
-        case LearningRateScheduler.COSINE:
-            lr_lambda = lr_lambda_cosine(
-                scheduler_steps,
-                eta_min
-            )
+            case LearningRateScheduler.COSINE:
+                lr_lambda = lr_lambda_cosine(
+                    scheduler_steps,
+                    eta_min
+                )
 
-        case LearningRateScheduler.COSINE_WITH_RESTARTS:
-            lr_lambda = lr_lambda_cosine_with_restarts(
-                scheduler_steps, num_cycles, eta_min
-            )
+            case LearningRateScheduler.COSINE_WITH_RESTARTS:
+                lr_lambda = lr_lambda_cosine_with_restarts(
+                    scheduler_steps, num_cycles, eta_min
+                )
 
-        case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
-            lr_lambda = lr_lambda_cosine_with_hard_restarts(
-                scheduler_steps, num_cycles, eta_min
-            )
-        case LearningRateScheduler.REX:
-            lr_lambda = lr_lambda_rex(
-                scheduler_steps
-            )
-        case LearningRateScheduler.ADAFACTOR:
-            from transformers.optimization import AdafactorSchedule
-            return AdafactorSchedule(
-                optimizer,
-                initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
-            )
-        case LearningRateScheduler.CUSTOM:
-            # Special case. Unlike the others, we return from here.
-            if not config.custom_learning_rate_scheduler:
-                raise AssertionError("Must specify a class when using a custom LR scheduler.")
-            if "." not in config.custom_learning_rate_scheduler:
-                raise AssertionError("Custom class name must be in the format <module>.<class>")
-            klass = config.custom_learning_rate_scheduler.split(".")[-1]
-            module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
-            module = importlib.import_module(module)
-            klass = getattr(module, klass)
-            # Compile arguments into single dict.
-            args = {}
-            for pd in config.scheduler_params:
-                key = pd["key"]
-                value = pd["value"]
-                # Special values
-                match value:
-                    case "%LR%":
-                        value = config.learning_rate
-                    case "%EPOCHS%":
-                        value = num_epochs
-                    case "%STEPS_PER_EPOCH%":
-                        value = steps_per_epoch
-                    case "%TOTAL_STEPS%":
-                        value = total_steps
-                    case "%SCHEDULER_STEPS%":
-                        value = scheduler_steps
-                    case _:
-                        value = ast.literal_eval(value)
-                args[key] = value
-            scheduler = klass(optimizer=optimizer,
-                              last_epoch=int(global_step / gradient_accumulation_steps) - 1,
-                              **args)
-            if warmup_steps > 0:
-                warmup_scheduler = LambdaLR(
-                    optimizer=optimizer,
-                    lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
-                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
-                scheduler = SequentialLR(
+            case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
+                lr_lambda = lr_lambda_cosine_with_hard_restarts(
+                    scheduler_steps, num_cycles, eta_min
+                )
+            case LearningRateScheduler.REX:
+                lr_lambda = lr_lambda_rex(
+                    scheduler_steps
+                )
+            case LearningRateScheduler.ADAFACTOR:
+                from transformers.optimization import AdafactorSchedule
+                return AdafactorSchedule(
                     optimizer,
-                    schedulers=[warmup_scheduler, scheduler],
-                    milestones=[warmup_steps],
-                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
-            return scheduler
-        case _:
-            lr_lambda = lr_lambda_constant()
+                    initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
+                )
+            case LearningRateScheduler.CUSTOM:
+                # Special case. Unlike the others, we return from here.
+                if not config.custom_learning_rate_scheduler:
+                    raise AssertionError("Must specify a class when using a custom LR scheduler.")
+                if "." not in config.custom_learning_rate_scheduler:
+                    raise AssertionError("Custom class name must be in the format <module>.<class>")
+                klass = config.custom_learning_rate_scheduler.split(".")[-1]
+                module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
+                module = importlib.import_module(module)
+                klass = getattr(module, klass)
+                # Compile arguments into single dict.
+                args = {}
+                for pd in config.scheduler_params:
+                    key = pd["key"]
+                    value = pd["value"]
+                    # Special values
+                    match value:
+                        case "%LR%":
+                            value = config.learning_rate
+                        case "%EPOCHS%":
+                            value = num_epochs
+                        case "%STEPS_PER_EPOCH%":
+                            value = steps_per_epoch
+                        case "%TOTAL_STEPS%":
+                            value = total_steps
+                        case "%SCHEDULER_STEPS%":
+                            value = scheduler_steps
+                        case _:
+                            value = ast.literal_eval(value)
+                    args[key] = value
+                scheduler = klass(optimizer=optimizer,
+                                last_epoch=int(global_step / gradient_accumulation_steps) - 1,
+                                **args)
+                if warmup_steps > 0:
+                    warmup_scheduler = LambdaLR(
+                        optimizer=optimizer,
+                        lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
+                        last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                    scheduler = SequentialLR(
+                        optimizer,
+                        schedulers=[warmup_scheduler, scheduler],
+                        milestones=[warmup_steps],
+                        last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                return scheduler
+            case _:
+                lr_lambda = lr_lambda_constant()
 
-    if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
-        lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
+        if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
+            lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
+
+        lr_lambdas.append(lr_lambda)
 
     return LambdaLR(
         optimizer=optimizer,
-        lr_lambda=lr_lambda,
+        lr_lambda=lr_lambdas,
         last_epoch=int(global_step / gradient_accumulation_steps) - 1,
     )
 

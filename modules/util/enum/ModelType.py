@@ -12,6 +12,7 @@ class ModelType(Enum):
     STABLE_DIFFUSION_21_BASE = 'STABLE_DIFFUSION_21_BASE'
 
     STABLE_DIFFUSION_3 = 'STABLE_DIFFUSION_3'
+    STABLE_DIFFUSION_35 = 'STABLE_DIFFUSION_35'
 
     STABLE_DIFFUSION_XL_10_BASE = 'STABLE_DIFFUSION_XL_10_BASE'
     STABLE_DIFFUSION_XL_10_BASE_INPAINTING = 'STABLE_DIFFUSION_XL_10_BASE_INPAINTING'
@@ -23,6 +24,9 @@ class ModelType(Enum):
     PIXART_SIGMA = 'PIXART_SIGMA'
 
     FLUX_DEV_1 = 'FLUX_DEV_1'
+    FLUX_FILL_DEV_1 = 'FLUX_FILL_DEV_1'
+
+    SANA = 'SANA'
 
     def __str__(self):
         return self.value
@@ -42,7 +46,11 @@ class ModelType(Enum):
             or self == ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING
 
     def is_stable_diffusion_3(self):
-        return self == ModelType.STABLE_DIFFUSION_3
+        return self == ModelType.STABLE_DIFFUSION_3 \
+            or self == ModelType.STABLE_DIFFUSION_35
+
+    def is_stable_diffusion_3_5(self):
+        return self == ModelType.STABLE_DIFFUSION_35
 
     def is_wuerstchen(self):
         return self == ModelType.WUERSTCHEN_2 \
@@ -59,17 +67,23 @@ class ModelType(Enum):
         return self == ModelType.PIXART_SIGMA
 
     def is_flux(self):
-        return self == ModelType.FLUX_DEV_1
+        return self == ModelType.FLUX_DEV_1 \
+            or self == ModelType.FLUX_FILL_DEV_1
+
+    def is_sana(self):
+        return self == ModelType.SANA
 
     def has_mask_input(self) -> bool:
         return self == ModelType.STABLE_DIFFUSION_15_INPAINTING \
             or self == ModelType.STABLE_DIFFUSION_20_INPAINTING \
-            or self == ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING
+            or self == ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING \
+            or self == ModelType.FLUX_FILL_DEV_1
 
     def has_conditioning_image_input(self) -> bool:
         return self == ModelType.STABLE_DIFFUSION_15_INPAINTING \
             or self == ModelType.STABLE_DIFFUSION_20_INPAINTING \
-            or self == ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING
+            or self == ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING \
+            or self == ModelType.FLUX_FILL_DEV_1
 
     def has_depth_input(self):
         return self == ModelType.STABLE_DIFFUSION_20_DEPTH

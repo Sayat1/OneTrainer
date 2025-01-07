@@ -1,5 +1,5 @@
 import math
-from typing import Callable
+from collections.abc import Callable
 
 
 def lr_lambda_warmup(warmup_steps: int, lr_lambda: Callable[[int], float]):
@@ -46,7 +46,7 @@ def lr_lambda_cosine_with_restarts(
         eta_min: float,
 ):
     def lr_lambda(current_step: int):
-        progress = float(current_step) / float(scheduler_steps)
+        progress = float(min(current_step, scheduler_steps - 1)) / float(scheduler_steps)
         schedule = math.cos(progress * 2.0 * math.pi * num_cycles)
         return max(eta_min, eta_min + 0.5 * (1.0-eta_min) * (1.0 + schedule))
 
@@ -59,7 +59,7 @@ def lr_lambda_cosine_with_hard_restarts(
         eta_min: float,
 ):
     def lr_lambda(current_step: int):
-        progress = float(current_step) / float(scheduler_steps)
+        progress = float(min(current_step, scheduler_steps - 1)) / float(scheduler_steps)
         schedule = math.cos(((progress * num_cycles) % 1.0) * math.pi)
         return max(eta_min, eta_min + 0.5 * (1.0-eta_min) * (1.0 + schedule))
 

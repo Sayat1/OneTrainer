@@ -2,6 +2,7 @@ import os
 import traceback
 
 from modules.model.PixArtAlphaModel import PixArtAlphaModel
+from modules.modelLoader.mixin.HFModelLoaderMixin import HFModelLoaderMixin
 from modules.util.enum.ModelType import ModelType
 from modules.util.ModelNames import ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
@@ -10,9 +11,11 @@ from diffusers import AutoencoderKL, DDIMScheduler, Transformer2DModel
 from transformers import T5EncoderModel, T5Tokenizer
 
 
-class PixArtAlphaModelLoader:
+class PixArtAlphaModelLoader(
+    HFModelLoaderMixin,
+):
     def __init__(self):
-        super(PixArtAlphaModelLoader, self).__init__()
+        super().__init__()
 
     def __load_internal(
             self,
@@ -45,29 +48,36 @@ class PixArtAlphaModelLoader:
             subfolder="scheduler",
         )
 
-        text_encoder = T5EncoderModel.from_pretrained(
+        text_encoder = self._load_transformers_sub_module(
+            T5EncoderModel,
+            weight_dtypes.text_encoder,
+            weight_dtypes.fallback_train_dtype,
             base_model_name,
-            subfolder="text_encoder",
-            torch_dtype=weight_dtypes.text_encoder.torch_dtype(),
+            "text_encoder",
         )
-        text_encoder.encoder.embed_tokens.to(dtype=weight_dtypes.text_encoder.torch_dtype(supports_quantization=False))
 
         if vae_model_name:
-            vae = AutoencoderKL.from_pretrained(
+            vae = self._load_diffusers_sub_module(
+                AutoencoderKL,
+                weight_dtypes.vae,
+                weight_dtypes.train_dtype,
                 vae_model_name,
-                torch_dtype=weight_dtypes.vae.torch_dtype(),
             )
         else:
-            vae = AutoencoderKL.from_pretrained(
+            vae = self._load_diffusers_sub_module(
+                AutoencoderKL,
+                weight_dtypes.vae,
+                weight_dtypes.train_dtype,
                 base_model_name,
-                subfolder="vae",
-                torch_dtype=weight_dtypes.vae.torch_dtype(),
+                "vae",
             )
 
-        transformer = Transformer2DModel.from_pretrained(
+        transformer = self._load_diffusers_sub_module(
+            Transformer2DModel,
+            weight_dtypes.prior,
+            weight_dtypes.train_dtype,
             base_model_name,
-            subfolder="transformer",
-            torch_dtype=weight_dtypes.prior.torch_dtype(),
+            "transformer",
         )
 
         model.model_type = model_type
@@ -91,13 +101,13 @@ class PixArtAlphaModelLoader:
         try:
             self.__load_internal(model, model_type, weight_dtypes, base_model_name, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_diffusers(model, model_type, weight_dtypes, base_model_name, model_names.vae_model)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

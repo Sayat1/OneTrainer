@@ -17,7 +17,7 @@ class WuerstchenEmbeddingSetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(WuerstchenEmbeddingSetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -72,9 +72,7 @@ class WuerstchenEmbeddingSetup(
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self.setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,

@@ -2,13 +2,12 @@ import copy
 import os
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
+from modules.dataLoader.flux.ShuffleFluxFillMaskChannels import ShuffleFluxFillMaskChannels
 from modules.dataLoader.mixin.DataLoaderText2ImageMixin import DataLoaderText2ImageMixin
 from modules.model.FluxModel import FluxModel
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
-
-import torch
 
 from mgds.MGDS import MGDS, TrainDataLoader
 from mgds.pipelineModules.DecodeTokens import DecodeTokens
@@ -25,6 +24,8 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 from mgds.pipelineModules.VariationSorting import VariationSorting
 
+import torch
+
 
 class FluxBaseDataLoader(
     BaseDataLoader,
@@ -39,7 +40,7 @@ class FluxBaseDataLoader(
             train_progress: TrainProgress,
             is_validation: bool = False,
     ):
-        super(FluxBaseDataLoader, self).__init__(
+        super().__init__(
             train_device,
             temp_device,
         )
@@ -68,6 +69,7 @@ class FluxBaseDataLoader(
         encode_image = EncodeVAE(in_name='image', out_name='latent_image_distribution', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
         image_sample = SampleVAEDistribution(in_name='latent_image_distribution', out_name='latent_image', mode='mean')
         downscale_mask = ScaleImage(in_name='mask', out_name='latent_mask', factor=0.125)
+        shuffle_mask_channels = ShuffleFluxFillMaskChannels(in_name='mask', out_name='latent_mask')
         encode_conditioning_image = EncodeVAE(in_name='conditioning_image', out_name='latent_conditioning_image_distribution', vae=model.vae, autocast_contexts=[model.autocast_context], dtype=model.train_dtype.torch_dtype())
         conditioning_image_sample = SampleVAEDistribution(in_name='latent_conditioning_image_distribution', out_name='latent_conditioning_image', mode='mean')
         tokenize_prompt_1 = Tokenize(in_name='prompt', tokens_out_name='tokens_1', mask_out_name='tokens_mask_1', tokenizer=model.tokenizer_1, max_token_length=model.tokenizer_1.model_max_length)
@@ -82,7 +84,9 @@ class FluxBaseDataLoader(
         if model.tokenizer_2:
             modules.append(tokenize_prompt_2)
 
-        if config.masked_training or config.model_type.has_mask_input():
+        if config.model_type.has_mask_input():
+            modules.append(shuffle_mask_channels)
+        elif config.masked_training:
             modules.append(downscale_mask)
 
         if config.model_type.has_conditioning_image_input():
@@ -216,7 +220,7 @@ class FluxBaseDataLoader(
             before_cache_image_fun=before_cache_image_fun,
             use_conditioning_image=True,
             vae=model.vae,
-            autocast_context=model.autocast_context,
+            autocast_context=[model.autocast_context],
             train_dtype=model.train_dtype,
         )
 

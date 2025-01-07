@@ -8,8 +8,6 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 
-import torch
-
 from mgds.MGDS import MGDS, TrainDataLoader
 from mgds.pipelineModules.DecodeTokens import DecodeTokens
 from mgds.pipelineModules.DecodeVAE import DecodeVAE
@@ -23,6 +21,8 @@ from mgds.pipelineModules.SaveText import SaveText
 from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.Tokenize import Tokenize
 from mgds.pipelineModules.VariationSorting import VariationSorting
+
+import torch
 
 
 class PixArtAlphaBaseDataLoader(
@@ -38,7 +38,7 @@ class PixArtAlphaBaseDataLoader(
             train_progress: TrainProgress,
             is_validation: bool = False,
     ):
-        super(PixArtAlphaBaseDataLoader, self).__init__(
+        super().__init__(
             train_device,
             temp_device,
         )
@@ -181,7 +181,7 @@ class PixArtAlphaBaseDataLoader(
             before_cache_image_fun=before_cache_image_fun,
             use_conditioning_image=True,
             vae=model.vae,
-            autocast_context=model.autocast_context,
+            autocast_context=[model.autocast_context],
             train_dtype=model.train_dtype,
         )
 

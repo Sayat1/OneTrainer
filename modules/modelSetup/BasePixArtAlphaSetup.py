@@ -11,14 +11,15 @@ from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
 from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.checkpointing_util import (
     create_checkpointed_forward,
+    enable_checkpointing_for_basic_transformer_blocks,
     enable_checkpointing_for_t5_encoder_layers,
-    enable_checkpointing_for_sdxl_transformer_blocks,
 )
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context, disable_fp16_autocast_context
 from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.quantization_util import quantize_layers
 from modules.util.TrainProgress import TrainProgress
 
 import torch
@@ -40,7 +41,7 @@ class BasePixArtAlphaSetup(
 ):
 
     def __init__(self, train_device: torch.device, temp_device: torch.device, debug_mode: bool):
-        super(BasePixArtAlphaSetup, self).__init__(train_device, temp_device, debug_mode)
+        super().__init__(train_device, temp_device, debug_mode)
 
     def setup_optimizations(
             self,
@@ -48,12 +49,12 @@ class BasePixArtAlphaSetup(
             config: TrainConfig,
     ):
         if config.attention_mechanism == AttentionMechanism.DEFAULT:
-            for name, child_module in model.transformer.named_modules():
+            for child_module in model.transformer.modules():
                 if isinstance(child_module, Attention):
                     child_module.set_processor(AttnProcessor())
         elif config.attention_mechanism == AttentionMechanism.XFORMERS and is_xformers_available():
             try:
-                for name, child_module in model.transformer.named_modules():
+                for child_module in model.transformer.modules():
                     if isinstance(child_module, Attention):
                         child_module.set_processor(XFormersAttnProcessor())
                 model.vae.enable_xformers_memory_efficient_attention()
@@ -63,7 +64,7 @@ class BasePixArtAlphaSetup(
                     f" correctly and a GPU is available: {e}"
                 )
         elif config.attention_mechanism == AttentionMechanism.SDP:
-            for name, child_module in model.transformer.named_modules():
+            for child_module in model.transformer.modules():
                 if isinstance(child_module, Attention):
                     child_module.set_processor(AttnProcessor2_0())
 
@@ -78,11 +79,10 @@ class BasePixArtAlphaSetup(
 
         if config.gradient_checkpointing.enabled():
             model.vae.enable_gradient_checkpointing()
-            enable_checkpointing_for_sdxl_transformer_blocks(
-                model.transformer, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
-            if config.text_encoder.train or config.train_any_embedding():
-                enable_checkpointing_for_t5_encoder_layers(
-                    model.text_encoder, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
+            model.transformer_offload_conductor = \
+                enable_checkpointing_for_basic_transformer_blocks(model.transformer, config, offload_enabled=True)
+            model.text_encoder_offload_conductor = \
+                enable_checkpointing_for_t5_encoder_layers(model.text_encoder, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -109,6 +109,10 @@ class BasePixArtAlphaSetup(
             ],
             config.enable_autocast_cache,
         )
+
+        quantize_layers(model.text_encoder, self.train_device, model.text_encoder_train_dtype)
+        quantize_layers(model.vae, self.train_device, model.train_dtype)
+        quantize_layers(model.transformer, self.train_device, model.train_dtype)
 
     def _setup_additional_embeddings(
             self,
@@ -199,11 +203,15 @@ class BasePixArtAlphaSetup(
             vae_scaling_factor = model.vae.config['scaling_factor']
 
             text_encoder_output, text_encoder_attention_mask = model.encode_text(
+                train_device=self.train_device,
+                batch_size=batch['latent_image'].shape[0],
+                rand=rand,
                 tokens=batch['tokens'],
                 text_encoder_layer_skip=config.text_encoder_layer_skip,
                 text_encoder_output=batch[
                     'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
                 attention_mask=batch['tokens_mask'],
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
             )
 
             latent_image = batch['latent_image']
@@ -220,6 +228,9 @@ class BasePixArtAlphaSetup(
                 dummy.requires_grad_(True)
 
                 negative_text_encoder_output, negative_text_encoder_attention_mask = model.encode_text(
+                    train_device=self.train_device,
+                    batch_size=batch['latent_image'].shape[0],
+                    rand=rand,
                     text="",
                     text_encoder_layer_skip=config.text_encoder_layer_skip,
                 )

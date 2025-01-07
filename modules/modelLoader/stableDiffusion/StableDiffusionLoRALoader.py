@@ -11,7 +11,7 @@ from safetensors.torch import load_file
 
 class StableDiffusionLoRALoader:
     def __init__(self):
-        super(StableDiffusionLoRALoader, self).__init__()
+        super().__init__()
 
     def __load_safetensors(
             self,
@@ -25,7 +25,7 @@ class StableDiffusionLoRALoader:
             model: StableDiffusionModel,
             lora_name: str,
     ):
-        model.lora_state_dict = torch.load(lora_name)
+        model.lora_state_dict = torch.load(lora_name, weights_only=True)
 
     def __load_internal(
             self,
@@ -52,19 +52,19 @@ class StableDiffusionLoRALoader:
         try:
             self.__load_internal(model, model_names.lora)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_ckpt(model, model_names.lora)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         try:
             self.__load_safetensors(model, model_names.lora)
             return
-        except:
+        except Exception:
             stacktraces.append(traceback.format_exc())
 
         for stacktrace in stacktraces:

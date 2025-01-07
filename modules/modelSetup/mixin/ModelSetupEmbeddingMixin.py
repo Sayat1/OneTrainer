@@ -1,22 +1,23 @@
 from abc import ABCMeta
 
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
+
 import torch
 from torch import Tensor
 
-from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer, T5EncoderModel, T5Tokenizer
+from transformers import CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer, T5EncoderModel, T5Tokenizer, \
+    GemmaTokenizer, Gemma2Model
 from transformers.tokenization_utils import Trie
-
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
-from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 
 
 class ModelSetupEmbeddingMixin(metaclass=ABCMeta):
     def __init__(self):
-        super(ModelSetupEmbeddingMixin, self).__init__()
+        super().__init__()
 
     def _remove_added_embeddings_from_tokenizer(
             self,
-            tokenizer: CLIPTokenizer | T5Tokenizer,
+            tokenizer: CLIPTokenizer | T5Tokenizer | GemmaTokenizer,
     ):
         if tokenizer:
             added_tokens = list(filter(lambda item: not item[1].special, tokenizer._added_tokens_decoder.items()))
@@ -28,8 +29,8 @@ class ModelSetupEmbeddingMixin(metaclass=ABCMeta):
 
     def _create_new_embedding(
             self,
-            tokenizer: CLIPTokenizer | T5Tokenizer,
-            text_encoder: CLIPTextModel | CLIPTextModelWithProjection | T5EncoderModel,
+            tokenizer: CLIPTokenizer | T5Tokenizer | GemmaTokenizer,
+            text_encoder: CLIPTextModel | CLIPTextModelWithProjection | T5EncoderModel | Gemma2Model,
             initial_embedding_text: str,
             token_count: int,
     ) -> Tensor:
@@ -52,7 +53,7 @@ class ModelSetupEmbeddingMixin(metaclass=ABCMeta):
 
     def _add_embedding_to_tokenizer(
             self,
-            tokenizer: CLIPTokenizer | T5Tokenizer,
+            tokenizer: CLIPTokenizer | T5Tokenizer | GemmaTokenizer,
             embedding: list[str],
     ) -> (Tensor, list[bool]):
         tokenizer.add_tokens(embedding)
@@ -66,11 +67,10 @@ class ModelSetupEmbeddingMixin(metaclass=ABCMeta):
     ):
         for parameter, placeholder, name in zip(embedding_wrapper.additional_embeddings,
                                                 embedding_wrapper.additional_embedding_placeholders,
-                                                embedding_wrapper.additional_embedding_names):
+                                                embedding_wrapper.additional_embedding_names, strict=True):
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name=f"{prefix}/{name}",
                 display_name=f"{prefix}/{placeholder}",
                 parameters=[parameter],
                 learning_rate=embedding_learning_rate,
             ))
-            

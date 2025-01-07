@@ -1,3 +1,4 @@
+import contextlib
 from tkinter import TclError
 
 from modules.util.config.TrainConfig import TrainConfig
@@ -31,7 +32,7 @@ class OptimizerParamsWindow(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self.on_window_close)
 
         self.title("Optimizer Settings")
-        self.geometry("800x400")
+        self.geometry("800x500")
         self.resizable(True, True)
         self.wait_visibility()
         self.grab_set()
@@ -71,13 +72,11 @@ class OptimizerParamsWindow(ctk.CTkToplevel):
         self.create_dynamic_ui(master)
 
     def clear_dynamic_ui(self, master):
-        try:
+        with contextlib.suppress(TclError):
             for widget in master.winfo_children():
                 grid_info = widget.grid_info()
                 if int(grid_info["row"]) >= 1:
                     widget.destroy()
-        except TclError:
-            pass
 
     def create_dynamic_ui(
             self,
@@ -123,7 +122,6 @@ class OptimizerParamsWindow(ctk.CTkToplevel):
             'no_prox': {'title': 'No Prox', 'tooltip': 'Whether to use proximity updates or not.', 'type': 'bool'},
             'optim_bits': {'title': 'Optim Bits', 'tooltip': 'Number of bits used for optimization.', 'type': 'int'},
             'percentile_clipping': {'title': 'Percentile Clipping', 'tooltip': 'Gradient clipping based on percentile values.', 'type': 'float'},
-            'r': {'title': 'r', 'tooltip': 'Use polynomial weighting in the average with power r', 'type': 'float'},
             'relative_step': {'title': 'Relative Step', 'tooltip': 'Whether to use a relative step size.', 'type': 'bool'},
             'safeguard_warmup': {'title': 'Safeguard Warmup', 'tooltip': 'Avoid issues during warm-up stage.', 'type': 'bool'},
             'scale_parameter': {'title': 'Scale Parameter', 'tooltip': 'Whether to scale the parameter or not.', 'type': 'bool'},
@@ -144,7 +142,8 @@ class OptimizerParamsWindow(ctk.CTkToplevel):
             'r': {'title': 'R', 'tooltip': 'EMA factor.', 'type': 'float'},
             'adanorm': {'title': 'AdaNorm', 'tooltip': 'Whether to use the AdaNorm variant', 'type': 'bool'},
             'adam_debias': {'title': 'Adam Debias', 'tooltip': 'Only correct the denominator to avoid inflating step sizes early in training.', 'type': 'bool'},
-
+            'slice_p': {'title': 'Slice parameters', 'tooltip': 'Reduce memory usage by calculating LR adaptation statistics on only every pth entry of each tensor. For values greater than 1 this is an approximation to standard Prodigy. Values ~11 are reasonable.', 'type': 'int'},
+            'cautious': {'title': 'Cautious', 'tooltip': 'Whether to use the Cautious variant.', 'type': 'bool'},
         }
         # @formatter:on
 

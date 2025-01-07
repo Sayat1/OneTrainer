@@ -19,7 +19,7 @@ class StableDiffusionXLLoRASetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(StableDiffusionXLLoRASetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -115,6 +115,7 @@ class StableDiffusionXLLoRASetup(
     ):
         create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te1")
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
+        create_unet = config.unet.train or state_dict_has_prefix(model.lora_state_dict, "lora_unet")
 
         LycorisNetwork.LORA_PREFIX = "lora_te1"
         model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank if config.lora_te_rank == -1 else config.lora_te_rank, linear_alpha=config.lora_alpha if config.lora_te_alpha == -1.0 else config.lora_te_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
@@ -130,8 +131,8 @@ class StableDiffusionXLLoRASetup(
                 model.text_encoder_1_lora.load_state_dict(model.lora_state_dict)
             if create_te2:
                 model.text_encoder_2_lora.load_state_dict(model.lora_state_dict)
-
-            model.unet_lora.load_state_dict(model.lora_state_dict)
+            if create_unet:
+                model.unet_lora.load_state_dict(model.lora_state_dict)
             model.lora_state_dict = None
 
         if create_te1:

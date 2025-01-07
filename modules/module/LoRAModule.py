@@ -2,7 +2,8 @@ import copy
 import math
 import re
 from abc import abstractmethod
-from typing import Any, Mapping, Tuple
+from collections.abc import Mapping
+from typing import Any
 
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import PeftType
@@ -93,7 +94,7 @@ class PeftBase(nn.Module):
     def check_initialized(self):
         """Checks, and raises an exception, if the module is not initialized."""
         if not self._initialized:
-            raise RuntimeError("Module %s is not initialized." % self.prefix)
+            raise RuntimeError(f"Module {self.prefix} is not initialized.")
 
         # Perform assertions to make pytype happy.
         assert self.orig_forward is not None
@@ -122,7 +123,7 @@ class PeftBase(nn.Module):
     def extract_from_module(self, base_module: nn.Module):
         pass
 
-    def create_layer(self) -> Tuple[nn.Module, nn.Module]:
+    def create_layer(self) -> tuple[nn.Module, nn.Module]:
         """Generic helper function for creating a PEFT layer, like LoRA.
 
         Creates down/up layer modules for the given layer type in the
@@ -292,7 +293,7 @@ class LoRAModule(PeftBase):
     # construction, but definitely exist by the time those methods are called.
 
     def __init__(self, prefix: str, orig_module: nn.Module | None, rank: int, alpha: float):
-        super(LoRAModule, self).__init__(prefix, orig_module)
+        super().__init__(prefix, orig_module)
 
         self.rank = rank
         self.dropout = Dropout(0)
@@ -344,15 +345,17 @@ class DoRAModule(LoRAModule):
     def __init__(self, *args, **kwargs):
         self.dora_scale = None
         self.norm_epsilon = kwargs.pop('norm_epsilon', False)
+        self.train_device = kwargs.pop('train_device')
         super().__init__(*args, **kwargs)
 
     def initialize_weights(self):
         super().initialize_weights()
 
+        orig_weight = get_unquantized_weight(self.orig_module, torch.float, self.train_device)
+
         # Thanks to KohakuBlueLeaf once again for figuring out the shape
         # wrangling that works for both Linear and Convolutional layers. If you
         # were just doing this for Linear, it would be substantially simpler.
-        orig_weight = get_unquantized_weight(self.orig_module, torch.float)
         self.dora_num_dims = orig_weight.dim() - 1
         self.dora_scale = nn.Parameter(
             torch.norm(
@@ -374,7 +377,7 @@ class DoRAModule(LoRAModule):
 
         A = self.lora_down.weight
         B = self.lora_up.weight
-        orig_weight = get_unquantized_weight(self.orig_module, A.dtype)
+        orig_weight = get_unquantized_weight(self.orig_module, A.dtype, self.train_device)
         WP = orig_weight + (self.make_weight(A, B) * (self.alpha / self.rank))
         del orig_weight
         # A norm should never really end up zero at any point, but epsilon just
@@ -415,8 +418,6 @@ class LoRAModuleWrapper:
             self,
             orig_module: nn.Module | None,
             prefix: str,
-            rank,
-            alpha,
             config: TrainConfig,
             module_filter: list[str] = None,
             module_exclude_block: list[str] = None,
@@ -424,8 +425,8 @@ class LoRAModuleWrapper:
         self.orig_module = orig_module
         self.prefix = prefix
         self.peft_type = config.peft_type
-        self.rank = rank
-        self.alpha = alpha
+        self.rank = config.lora_rank
+        self.alpha = config.lora_alpha
         self.module_filter = [x.strip() for x in module_filter] if module_filter is not None else []
         weight_decompose = config.lora_decompose
         if self.peft_type == PeftType.LORA:
@@ -433,7 +434,10 @@ class LoRAModuleWrapper:
                 self.klass = DoRAModule
                 self.dummy_klass = DummyDoRAModule
                 self.additional_args = [self.rank, self.alpha]
-                self.additional_kwargs = {'norm_epsilon': config.lora_decompose_norm_epsilon}
+                self.additional_kwargs = {
+                    'norm_epsilon': config.lora_decompose_norm_epsilon,
+                    'train_device': torch.device(config.train_device),
+                }
             else:
                 self.klass = LoRAModule
                 self.dummy_klass = DummyLoRAModule
@@ -456,15 +460,15 @@ class LoRAModuleWrapper:
                     train_module = False
                     module_rank = self.rank
                     module_alpha = self.alpha
-                    print(name,end="")
-                    if len(self.module_filter) == 0:
+                    print(f"{name} - {str(type(child_module))}",end="")
+                    if len(self.module_filter) == 0 or (len(self.module_filter)==1 and self.module_filter[0].strip()==""):
                         train_module = True
                     else:
                         for x in self.module_filter:
                             x_splited = x.split(":")
-                            if x_splited[0] in name:
+                            if x_splited[0] in name or x_splited[0] in str(type(child_module)):
                                 train_module = True
-                            elif re.match(x_splited[0], name):
+                            elif re.match(x_splited[0], name) or re.match(x_splited[0], str(type(child_module))):
                                 train_module = True
                             if train_module:
                                 if len(x_splited) > 1:
@@ -483,17 +487,17 @@ class LoRAModuleWrapper:
         return lora_modules
 
     def requires_grad_(self, requires_grad: bool):
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.requires_grad_(requires_grad)
 
     def parameters(self) -> list[Parameter]:
         parameters = []
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             parameters += module.parameters()
         return parameters
 
     def to(self, device: torch.device = None, dtype: torch.dtype = None) -> 'LoRAModuleWrapper':
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.to(device, dtype)
         return self
 
@@ -511,7 +515,7 @@ class LoRAModuleWrapper:
         for name, module in self.lora_modules.items():
             try:
                 module.load_state_dict(state_dict)
-            except RuntimeError:
+            except RuntimeError:  # noqa: PERF203
                 print(f"Missing key for {name}; initializing it to zero.")
 
         # Temporarily re-create the state dict, so we can see what keys were left.
@@ -531,7 +535,7 @@ class LoRAModuleWrapper:
         """
         state_dict = {}
 
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             state_dict |= module.state_dict(prefix=module.prefix)
 
         return state_dict
@@ -550,28 +554,28 @@ class LoRAModuleWrapper:
         """
         Hooks the LoRA into the module without changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.hook_to_module()
 
     def remove_hook_from_module(self):
         """
         Removes the LoRA hook from the module without changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.remove_hook_from_module()
 
     def apply_to_module(self):
         """
         Applys the LoRA to the module, changing its weights
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.apply_to_module()
 
     def extract_from_module(self, base_module: nn.Module):
         """
         Creates a LoRA from the difference between the base_module and the orig_module
         """
-        for name, module in self.lora_modules.items():
+        for module in self.lora_modules.values():
             module.extract_from_module(base_module)
 
     def prune(self):

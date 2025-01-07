@@ -9,8 +9,6 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
 
-import torch
-
 from mgds.MGDS import MGDS, TrainDataLoader
 from mgds.OutputPipelineModule import OutputPipelineModule
 from mgds.pipelineModules.AspectBatchSorting import AspectBatchSorting
@@ -37,6 +35,8 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.SingleAspectCalculation import SingleAspectCalculation
 from mgds.pipelineModules.VariationSorting import VariationSorting
 
+import torch
+
 
 class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
     def __init__(
@@ -48,7 +48,7 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
             train_progress: TrainProgress,
             is_validation: bool = False,
     ):
-        super(StableDiffusionFineTuneVaeDataLoader, self).__init__(
+        super().__init__(
             train_device,
             temp_device,
         )

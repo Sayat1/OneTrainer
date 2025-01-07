@@ -16,7 +16,7 @@ class StableDiffusion3LoRAModelLoader(
     InternalModelLoaderMixin,
 ):
     def __init__(self):
-        super(StableDiffusion3LoRAModelLoader, self).__init__()
+        super().__init__()
 
     def _default_model_spec_name(
             self,
@@ -25,6 +25,8 @@ class StableDiffusion3LoRAModelLoader(
         match model_type:
             case ModelType.STABLE_DIFFUSION_3:
                 return "resources/sd_model_spec/sd_3_2b_1.0-lora.json"
+            case ModelType.STABLE_DIFFUSION_35:
+                return "resources/sd_model_spec/sd_3.5_1.0-lora.json"
             case _:
                 return None
 

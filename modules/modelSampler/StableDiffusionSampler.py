@@ -1,8 +1,8 @@
 import inspect
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSampler.BaseModelSampler import BaseModelSampler
@@ -29,7 +29,7 @@ class StableDiffusionSampler(BaseModelSampler):
             model: StableDiffusionModel,
             model_type: ModelType,
     ):
-        super(StableDiffusionSampler, self).__init__(train_device, temp_device)
+        super().__init__(train_device, temp_device)
 
         self.model = model
         self.model_type = model_type
@@ -70,14 +70,19 @@ class StableDiffusionSampler(BaseModelSampler):
 
             prompt_embedding = self.model.encode_text(
                 text=prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_layer_skip=text_encoder_layer_skip,
             )
             negative_prompt_embedding = self.model.encode_text(
                 text=negative_prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_layer_skip=text_encoder_layer_skip,
             )
 
-            combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
+            combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding]) \
+                .to(dtype=self.model.train_dtype.torch_dtype())
 
             self.model.text_encoder_to(self.temp_device)
             torch_gc()
@@ -268,14 +273,19 @@ class StableDiffusionSampler(BaseModelSampler):
 
             prompt_embedding = self.model.encode_text(
                 text=prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_layer_skip=text_encoder_layer_skip,
             )
             negative_prompt_embedding = self.model.encode_text(
                 text=negative_prompt,
+                train_device=self.train_device,
+                batch_size=1,
                 text_encoder_layer_skip=text_encoder_layer_skip,
             )
 
-            combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding])
+            combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding]) \
+                .to(dtype=self.model.train_dtype.torch_dtype())
 
             self.model.text_encoder_to(self.temp_device)
             torch_gc()
@@ -374,8 +384,8 @@ class StableDiffusionSampler(BaseModelSampler):
             image = self.__sample_inpainting(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                height=sample_config.height,
-                width=sample_config.width,
+                height=self.quantize_resolution(sample_config.height, 8),
+                width=self.quantize_resolution(sample_config.width, 8),
                 seed=sample_config.seed,
                 random_seed=sample_config.random_seed,
                 diffusion_steps=sample_config.diffusion_steps,
@@ -393,8 +403,8 @@ class StableDiffusionSampler(BaseModelSampler):
             image = self.__sample_base(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                height=sample_config.height,
-                width=sample_config.width,
+                height=self.quantize_resolution(sample_config.height, 8),
+                width=self.quantize_resolution(sample_config.width, 8),
                 seed=sample_config.seed,
                 random_seed=sample_config.random_seed,
                 diffusion_steps=sample_config.diffusion_steps,

@@ -1,9 +1,12 @@
 import json
 import os
 import traceback
-from typing import Callable
+import webbrowser
+from collections.abc import Callable
+from contextlib import suppress
 
 from modules.util import path_util
+from modules.util.config.SecretsConfig import SecretsConfig
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.TrainingMethod import TrainingMethod
@@ -59,18 +62,21 @@ class TopBar:
         # TODO
         # components.icon_button(self.frame, 0, 2, "-", self.__remove_config)
 
+        # Wiki button
+        components.button(self.frame, 0, 4, "Wiki", self.open_wiki)
+
         # save button
         components.button(self.frame, 0, 3, "save current config", self.__save_config,
                           tooltip="Save the current configuration in a custom preset")
 
         # padding
-        self.frame.grid_columnconfigure(4, weight=1)
+        self.frame.grid_columnconfigure(5, weight=1)
 
         # model type
         components.options_kv(
             master=self.frame,
             row=0,
-            column=5,
+            column=6,
             values=[
                 ("Stable Diffusion 1.5", ModelType.STABLE_DIFFUSION_15),
                 ("Stable Diffusion 1.5 Inpainting", ModelType.STABLE_DIFFUSION_15_INPAINTING),
@@ -78,6 +84,7 @@ class TopBar:
                 ("Stable Diffusion 2.0 Inpainting", ModelType.STABLE_DIFFUSION_20_INPAINTING),
                 ("Stable Diffusion 2.1", ModelType.STABLE_DIFFUSION_21),
                 ("Stable Diffusion 3", ModelType.STABLE_DIFFUSION_3),
+                ("Stable Diffusion 3.5", ModelType.STABLE_DIFFUSION_35),
                 ("Stable Diffusion XL 1.0 Base", ModelType.STABLE_DIFFUSION_XL_10_BASE),
                 ("Stable Diffusion XL 1.0 Base Inpainting", ModelType.STABLE_DIFFUSION_XL_10_BASE_INPAINTING),
                 ("Wuerstchen v2", ModelType.WUERSTCHEN_2),
@@ -85,6 +92,8 @@ class TopBar:
                 ("PixArt Alpha", ModelType.PIXART_ALPHA),
                 ("PixArt Sigma", ModelType.PIXART_SIGMA),
                 ("Flux Dev", ModelType.FLUX_DEV_1),
+                ("Flux Fill Dev", ModelType.FLUX_FILL_DEV_1),
+                ("Sana", ModelType.SANA),
             ],
             ui_state=self.ui_state,
             var_name="model_type",
@@ -107,14 +116,11 @@ class TopBar:
         elif self.train_config.model_type.is_stable_diffusion_3() \
                 or self.train_config.model_type.is_stable_diffusion_xl() \
                 or self.train_config.model_type.is_wuerstchen() \
-                or self.train_config.model_type.is_pixart():
+                or self.train_config.model_type.is_pixart() \
+                or self.train_config.model_type.is_flux() \
+                or self.train_config.model_type.is_sana():
             values = [
                 ("Fine Tune", TrainingMethod.FINE_TUNE),
-                ("LoRA", TrainingMethod.LORA),
-                ("Embedding", TrainingMethod.EMBEDDING),
-            ]
-        elif self.train_config.model_type.is_flux():
-            values = [
                 ("LoRA", TrainingMethod.LORA),
                 ("Embedding", TrainingMethod.EMBEDDING),
             ]
@@ -123,7 +129,7 @@ class TopBar:
         self.training_method = components.options_kv(
             master=self.frame,
             row=0,
-            column=6,
+            column=7,
             values=values,
             ui_state=self.ui_state,
             var_name="training_method",
@@ -151,14 +157,28 @@ class TopBar:
                         name = os.path.basename(path)
                         name = os.path.splitext(name)[0]
                         self.configs.append((name, path))
+            self.configs.sort()
 
     def __save_to_file(self, name) -> str:
         name = path_util.safe_filename(name)
         path = path_util.canonical_join("training_presets", f"{name}.json")
+
+        config_dict = self.train_config.to_dict()
+        if 'secrets' in config_dict:
+            config_dict.pop('secrets')
+
         with open(path, "w") as f:
-            json.dump(self.train_config.to_dict(), f, indent=4)
+            json.dump(config_dict, f, indent=4)
 
         return path
+
+    def __save_secrets(self, path) -> str:
+        with open(path, "w") as f:
+            json.dump(self.train_config.secrets.to_dict(), f, indent=4)
+        return path
+
+    def open_wiki(self):
+        webbrowser.open("https://github.com/Nerogar/OneTrainer/wiki", new=0, autoraise=False)
 
     def __save_new_config(self, name):
         path = self.__save_to_file(name)
@@ -167,6 +187,7 @@ class TopBar:
 
         if is_new_config:
             self.configs.append((name, path))
+            self.configs.sort()
 
         if self.config_ui_data["config_name"] != path_util.canonical_join(self.dir, f"{name}.json"):
             self.config_ui_state.get_var("config_name").set(path_util.canonical_join(self.dir, f"{name}.json"))
@@ -201,6 +222,10 @@ class TopBar:
                     loaded_dict["__version"] = default_config.config_version
                 loaded_config = default_config.from_dict(loaded_dict).to_unpacked_config()
 
+            with suppress(FileNotFoundError), open("secrets.json", "r") as f:
+                secrets_dict=json.load(f)
+                loaded_config.secrets = SecretsConfig.default_values().from_dict(secrets_dict)
+
             self.train_config.from_dict(loaded_config.to_dict())
             self.ui_state.update(loaded_config)
 
@@ -208,6 +233,8 @@ class TopBar:
             self.ui_state.get_var("optimizer").update(optimizer_config)
 
             self.load_preset_callback()
+        except FileNotFoundError:
+            pass
         except Exception:
             print(traceback.format_exc())
 
@@ -217,3 +244,4 @@ class TopBar:
 
     def save_default(self):
         self.__save_to_file("#")
+        self.__save_secrets("secrets.json")

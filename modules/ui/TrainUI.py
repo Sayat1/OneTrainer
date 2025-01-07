@@ -2,9 +2,9 @@ import json
 import threading
 import traceback
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog
-from typing import Callable
 
 from modules.trainer.GenericTrainer import GenericTrainer
 from modules.ui.AdditionalEmbeddingsTab import AdditionalEmbeddingsTab
@@ -46,7 +46,7 @@ class TrainUI(ctk.CTk):
     training_commands: TrainCommands | None
 
     def __init__(self):
-        super(TrainUI, self).__init__()
+        super().__init__()
 
         self.title("OneTrainer")
         self.geometry("1100x740")
@@ -189,6 +189,9 @@ class TrainUI(ctk.CTk):
         components.label(frame, 7, 0, "Expose Tensorboard",
                          tooltip="Exposes Tensorboard Web UI to all network interfaces (makes it accessible from the network)")
         components.switch(frame, 7, 1, self.ui_state, "tensorboard_expose")
+        components.label(frame, 7, 2, "Tensorboard Port",
+                         tooltip="Port to use for Tensorboard link")
+        components.entry(frame, 7, 3, self.ui_state, "tensorboard_port")
 
         # validation
         components.label(frame, 8, 0, "Validation",
@@ -321,17 +324,22 @@ class TrainUI(ctk.CTk):
         components.switch(frame, 2, 1, self.ui_state, "backup_before_save")
 
         # save after
-        components.label(frame, 3, 0, "Save After",
+        components.label(frame, 3, 0, "Save Every",
                          tooltip="The interval used when automatically saving the model during training")
-        components.time_entry(frame, 3, 1, self.ui_state, "save_after", "save_after_unit")
+        components.time_entry(frame, 3, 1, self.ui_state, "save_every", "save_every_unit")
 
         # save now
         components.button(frame, 3, 3, "save now", self.save_now)
 
+        # skip save
+        components.label(frame, 4, 0, "Skip First",
+                         tooltip="Start saving automatically after this interval has elapsed")
+        components.entry(frame, 4, 1, self.ui_state, "save_skip_first", width=50, sticky="nw")
+
         # save filename prefix
-        components.label(frame, 4, 0, "Save Filename Prefix",
+        components.label(frame, 5, 0, "Save Filename Prefix",
                          tooltip="The prefix for filenames used when saving the model during training")
-        components.entry(frame, 4, 1, self.ui_state, "save_filename_prefix")
+        components.entry(frame, 5, 1, self.ui_state, "save_filename_prefix")
 
         frame.pack(fill="both", expand=1)
         return frame
@@ -494,7 +502,7 @@ class TrainUI(ctk.CTk):
             self.additional_embeddings_tab.refresh_ui()
 
     def open_tensorboard(self):
-        webbrowser.open("http://localhost:6006/", new=0, autoraise=False)
+        webbrowser.open("http://localhost:" + str(self.train_config.tensorboard_port), new=0, autoraise=False)
 
     def on_update_train_progress(self, train_progress: TrainProgress, max_sample: int, max_epoch: int):
         self.set_step_progress(train_progress.epoch_step, max_sample)
@@ -551,7 +559,7 @@ class TrainUI(ctk.CTk):
         try:
             trainer.start()
             trainer.train()
-        except:
+        except Exception:
             error_caught = True
             traceback.print_exc()
 
@@ -593,8 +601,12 @@ class TrainUI(ctk.CTk):
         ], initialdir=".", initialfile="config.json")
 
         if file_path:
+            config_dict=self.train_config.to_pack_dict()
+            if 'secrets' in config_dict:
+                config_dict.pop('secrets')
+
             with open(file_path, "w") as f:
-                json.dump(self.train_config.to_pack_dict(), f, indent=4)
+                json.dump(config_dict, f, indent=4)
 
     def sample_now(self):
         train_commands = self.training_commands

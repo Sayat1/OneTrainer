@@ -11,14 +11,15 @@ from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
 from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.checkpointing_util import (
     create_checkpointed_forward,
+    enable_checkpointing_for_basic_transformer_blocks,
     enable_checkpointing_for_clip_encoder_layers,
-    enable_checkpointing_for_sdxl_transformer_blocks,
 )
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import create_autocast_context
 from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.quantization_util import quantize_layers
 from modules.util.TrainProgress import TrainProgress
 
 import torch
@@ -40,9 +41,9 @@ class BaseStableDiffusionSetup(
 ):
 
     def __init__(self, train_device: torch.device, temp_device: torch.device, debug_mode: bool):
-        super(BaseStableDiffusionSetup, self).__init__(train_device, temp_device, debug_mode)
+        super().__init__(train_device, temp_device, debug_mode)
 
-    def _setup_optimizations(
+    def setup_optimizations(
             self,
             model: StableDiffusionModel,
             config: TrainConfig,
@@ -73,10 +74,8 @@ class BaseStableDiffusionSetup(
         if config.gradient_checkpointing.enabled():
             model.vae.enable_gradient_checkpointing()
             model.unet.enable_gradient_checkpointing()
-            enable_checkpointing_for_sdxl_transformer_blocks(
-                model.unet, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
-            enable_checkpointing_for_clip_encoder_layers(
-                model.text_encoder, self.train_device, self.temp_device, config.gradient_checkpointing.offload())
+            enable_checkpointing_for_basic_transformer_blocks(model.unet, config, offload_enabled=False)
+            enable_checkpointing_for_clip_encoder_layers(model.text_encoder, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.vae)
@@ -91,6 +90,10 @@ class BaseStableDiffusionSetup(
             config.weight_dtypes().lora if config.training_method == TrainingMethod.LORA else None,
             config.weight_dtypes().embedding if config.train_any_embedding() else None,
         ], config.enable_autocast_cache)
+
+        quantize_layers(model.text_encoder, self.train_device, model.train_dtype)
+        quantize_layers(model.vae, self.train_device, model.train_dtype)
+        quantize_layers(model.unet, self.train_device, model.train_dtype)
 
     def _setup_additional_embeddings(
             self,
@@ -181,10 +184,14 @@ class BaseStableDiffusionSetup(
             vae_scaling_factor = model.vae.config['scaling_factor']
 
             text_encoder_output = model.encode_text(
+                train_device=self.train_device,
+                batch_size=batch['latent_image'].shape[0],
+                rand=rand,
                 tokens=batch['tokens'],
                 text_encoder_layer_skip=config.text_encoder_layer_skip,
                 text_encoder_output=batch[
                     'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
             )
 
             latent_image = batch['latent_image']
@@ -198,6 +205,9 @@ class BaseStableDiffusionSetup(
 
             if is_align_prop_step and not deterministic:
                 negative_text_encoder_output = model.encode_text(
+                    train_device=self.train_device,
+                    batch_size=batch['latent_image'].shape[0],
+                    rand=rand,
                     text="",
                     text_encoder_layer_skip=config.text_encoder_layer_skip,
                 ).expand((scaled_latent_image.shape[0], -1, -1))
@@ -235,16 +245,16 @@ class BaseStableDiffusionSetup(
                         ).sample
 
                         negative_predicted_latent_noise = checkpointed_unet(
-                            latent_input,
+                            latent_input.to(dtype=model.train_dtype.torch_dtype()),
                             timestep,
-                            negative_text_encoder_output,
+                            negative_text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                             batch['latent_depth'],
                         ).sample
                     else:
                         predicted_latent_noise = checkpointed_unet(
-                            latent_input,
+                            latent_input.to(dtype=model.train_dtype.torch_dtype()),
                             timestep,
-                            text_encoder_output,
+                            text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                         ).sample
 
                         negative_predicted_latent_noise = checkpointed_unet(
@@ -317,11 +327,16 @@ class BaseStableDiffusionSetup(
 
                 if config.model_type.has_depth_input():
                     predicted_latent_noise = model.unet(
-                        latent_input, timestep, text_encoder_output, batch['latent_depth']
+                        latent_input.to(dtype=model.train_dtype.torch_dtype()),
+                        timestep,
+                        text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
+                        batch['latent_depth'].to(dtype=model.train_dtype.torch_dtype()),
                     ).sample
                 else:
                     predicted_latent_noise = model.unet(
-                        latent_input, timestep, text_encoder_output
+                        latent_input.to(dtype=model.train_dtype.torch_dtype()),
+                        timestep,
+                        text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
                     ).sample
 
                 model_output_data = {}

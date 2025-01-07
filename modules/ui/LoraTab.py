@@ -6,6 +6,7 @@ from modules.modelSetup.StableDiffusion3LoRASetup import PRESETS as sd3_presets
 from modules.modelSetup.StableDiffusionLoRASetup import PRESETS as sd_presets
 from modules.modelSetup.StableDiffusionXLLoRASetup import PRESETS as sdxl_presets
 from modules.modelSetup.WuerstchenLoRASetup import PRESETS as sc_presets
+from modules.modelSetup.SanaLoRASetup import PRESETS as sana_presets
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.enum.DataType import DataType
 from modules.util.enum.ModelType import PeftType
@@ -18,7 +19,7 @@ import customtkinter as ctk
 class LoraTab:
 
     def __init__(self, master, train_config: TrainConfig, ui_state: UIState):
-        super(LoraTab, self).__init__()
+        super().__init__()
 
         self.master = master
         self.train_config = train_config
@@ -52,6 +53,8 @@ class LoraTab:
             self.presets = pixart_presets
         elif self.train_config.model_type.is_flux():
             self.presets = flux_presets
+        elif self.train_config.model_type.is_sana():
+            self.presets = sana_presets
         else:
             self.presets = {"full": []}
         self.presets_list = list(self.presets.keys()) + ["custom"]

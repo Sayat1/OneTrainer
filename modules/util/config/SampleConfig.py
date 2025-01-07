@@ -27,7 +27,7 @@ class SampleConfig(BaseConfig):
     mask_image_path: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(SampleConfig, self).__init__(data)
+        super().__init__(data)
 
     def from_train_config(self, train_config):
         self.text_encoder_1_layer_skip = train_config.text_encoder_layer_skip
@@ -54,6 +54,7 @@ class SampleConfig(BaseConfig):
         data.append(("text_encoder_1_layer_skip", 0, int, False))
         data.append(("text_encoder_2_layer_skip", 0, int, False))
         data.append(("text_encoder_3_layer_skip", 0, int, False))
+        data.append(("prior_attention_mask", False, bool, False))
         data.append(("force_last_timestep", False, bool, False))
 
         data.append(("sample_inpainting", False, bool, False))
