@@ -75,7 +75,7 @@ class StableDiffusionXLModelLoader(
             subfolder="scheduler",
         )
         noise_scheduler = create.create_noise_scheduler(
-            noise_scheduler=model.train_config.train_sampler,
+            noise_scheduler=NoiseScheduler.DDIM,
             original_noise_scheduler=noise_scheduler,
         )
 
