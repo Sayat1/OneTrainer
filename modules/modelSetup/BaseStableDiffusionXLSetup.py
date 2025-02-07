@@ -393,7 +393,9 @@ class BaseStableDiffusionXLSetup(
                 )
 
                 if config.do_edm_style_training:
+                    timestep = timestep.to(device="cpu")
                     timestep = model.noise_scheduler.timesteps[timestep]
+                    timestep = timestep.to(device=generator.device)
 
                 # scaled_noisy_latent_image = self._add_noise_discrete(
                 #     scaled_latent_image,

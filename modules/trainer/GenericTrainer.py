@@ -1,7 +1,7 @@
 import contextlib
 import copy
 import json
-import os
+import os,sys
 import shutil
 import traceback
 import psutil
@@ -661,7 +661,6 @@ class GenericTrainer(BaseTrainer):
                     batch_size=self.config.batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
                     global_step=train_progress.global_step,
-                    eta_min=self.config.learning_rate_min,
                 )
 
             current_epoch_length = self.data_loader.get_data_set().approximate_length()
@@ -757,8 +756,6 @@ class GenericTrainer(BaseTrainer):
                             'loss': accumulated_loss,
                             'smooth loss': ema_loss,
                         })
-                        update_reports.update(reported_lr)
-                        step_tqdm.set_postfix(update_reports)
                         self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
                         accumulated_loss = 0.0
 
