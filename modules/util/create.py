@@ -6,6 +6,7 @@ from collections.abc import Iterable
 
 from modules.dataLoader.BaseDataLoader import BaseDataLoader
 from modules.dataLoader.FluxBaseDataLoader import FluxBaseDataLoader
+from modules.dataLoader.HunyuanVideoBaseDataLoader import HunyuanVideoBaseDataLoader
 from modules.dataLoader.PixArtAlphaBaseDataLoader import PixArtAlphaBaseDataLoader
 from modules.dataLoader.SanaBaseDataLoader import SanaBaseDataLoader
 from modules.dataLoader.StableDiffusion3BaseDataLoader import StableDiffusion3BaseDataLoader
@@ -18,6 +19,9 @@ from modules.modelLoader.BaseModelLoader import BaseModelLoader
 from modules.modelLoader.FluxEmbeddingModelLoader import FluxEmbeddingModelLoader
 from modules.modelLoader.FluxFineTuneModelLoader import FluxFineTuneModelLoader
 from modules.modelLoader.FluxLoRAModelLoader import FluxLoRAModelLoader
+from modules.modelLoader.HunyuanVideoEmbeddingModelLoader import HunyuanVideoEmbeddingModelLoader
+from modules.modelLoader.HunyuanVideoFineTuneModelLoader import HunyuanVideoFineTuneModelLoader
+from modules.modelLoader.HunyuanVideoLoRAModelLoader import HunyuanVideoLoRAModelLoader
 from modules.modelLoader.PixArtAlphaEmbeddingModelLoader import PixArtAlphaEmbeddingModelLoader
 from modules.modelLoader.PixArtAlphaFineTuneModelLoader import PixArtAlphaFineTuneModelLoader
 from modules.modelLoader.PixArtAlphaLoRAModelLoader import PixArtAlphaLoRAModelLoader
@@ -38,6 +42,7 @@ from modules.modelLoader.WuerstchenFineTuneModelLoader import WuerstchenFineTune
 from modules.modelLoader.WuerstchenLoRAModelLoader import WuerstchenLoRAModelLoader
 from modules.modelSampler import BaseModelSampler
 from modules.modelSampler.FluxSampler import FluxSampler
+from modules.modelSampler.HunyuanVideoSampler import HunyuanVideoSampler
 from modules.modelSampler.PixArtAlphaSampler import PixArtAlphaSampler
 from modules.modelSampler.SanaSampler import SanaSampler
 from modules.modelSampler.StableDiffusion3Sampler import StableDiffusion3Sampler
@@ -49,6 +54,9 @@ from modules.modelSaver.BaseModelSaver import BaseModelSaver
 from modules.modelSaver.FluxEmbeddingModelSaver import FluxEmbeddingModelSaver
 from modules.modelSaver.FluxFineTuneModelSaver import FluxFineTuneModelSaver
 from modules.modelSaver.FluxLoRAModelSaver import FluxLoRAModelSaver
+from modules.modelSaver.HunyuanVideoEmbeddingModelSaver import HunyuanVideoEmbeddingModelSaver
+from modules.modelSaver.HunyuanVideoFineTuneModelSaver import HunyuanVideoFineTuneModelSaver
+from modules.modelSaver.HunyuanVideoLoRAModelSaver import HunyuanVideoLoRAModelSaver
 from modules.modelSaver.PixArtAlphaEmbeddingModelSaver import PixArtAlphaEmbeddingModelSaver
 from modules.modelSaver.PixArtAlphaFineTuneModelSaver import PixArtAlphaFineTuneModelSaver
 from modules.modelSaver.PixArtAlphaLoRAModelSaver import PixArtAlphaLoRAModelSaver
@@ -71,6 +79,9 @@ from modules.modelSetup.BaseModelSetup import BaseModelSetup
 from modules.modelSetup.FluxEmbeddingSetup import FluxEmbeddingSetup
 from modules.modelSetup.FluxFineTuneSetup import FluxFineTuneSetup
 from modules.modelSetup.FluxLoRASetup import FluxLoRASetup
+from modules.modelSetup.HunyuanVideoEmbeddingSetup import HunyuanVideoEmbeddingSetup
+from modules.modelSetup.HunyuanVideoFineTuneSetup import HunyuanVideoFineTuneSetup
+from modules.modelSetup.HunyuanVideoLoRASetup import HunyuanVideoLoRASetup
 from modules.modelSetup.PixArtAlphaEmbeddingSetup import PixArtAlphaEmbeddingSetup
 from modules.modelSetup.PixArtAlphaFineTuneSetup import PixArtAlphaFineTuneSetup
 from modules.modelSetup.PixArtAlphaLoRASetup import PixArtAlphaLoRASetup
@@ -147,6 +158,8 @@ def create_model_loader(
                 return FluxFineTuneModelLoader()
             if model_type.is_sana():
                 return SanaFineTuneModelLoader()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoFineTuneModelLoader()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelLoader()
@@ -165,6 +178,8 @@ def create_model_loader(
                 return FluxLoRAModelLoader()
             if model_type.is_sana():
                 return SanaLoRAModelLoader()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoLoRAModelLoader()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelLoader()
@@ -180,6 +195,8 @@ def create_model_loader(
                 return FluxEmbeddingModelLoader()
             if model_type.is_sana():
                 return SanaEmbeddingModelLoader()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoEmbeddingModelLoader()
 
     return None
 
@@ -204,6 +221,8 @@ def create_model_saver(
                 return FluxFineTuneModelSaver()
             if model_type.is_sana():
                 return SanaFineTuneModelSaver()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoFineTuneModelSaver()
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneModelSaver()
@@ -222,6 +241,8 @@ def create_model_saver(
                 return FluxLoRAModelSaver()
             if model_type.is_sana():
                 return SanaLoRAModelSaver()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoLoRAModelSaver()
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingModelSaver()
@@ -237,6 +258,8 @@ def create_model_saver(
                 return FluxEmbeddingModelSaver()
             if model_type.is_sana():
                 return SanaEmbeddingModelSaver()
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoEmbeddingModelSaver()
 
     return None
 
@@ -264,6 +287,8 @@ def create_model_setup(
                 return FluxFineTuneSetup(train_device, temp_device, debug_mode)
             if model_type.is_sana():
                 return SanaFineTuneSetup(train_device, temp_device, debug_mode)
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoFineTuneSetup(train_device, temp_device, debug_mode)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneVaeSetup(train_device, temp_device, debug_mode)
@@ -282,6 +307,8 @@ def create_model_setup(
                 return FluxLoRASetup(train_device, temp_device, debug_mode)
             if model_type.is_sana():
                 return SanaLoRASetup(train_device, temp_device, debug_mode)
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoLoRASetup(train_device, temp_device, debug_mode)
         case TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionEmbeddingSetup(train_device, temp_device, debug_mode)
@@ -297,6 +324,8 @@ def create_model_setup(
                 return FluxEmbeddingSetup(train_device, temp_device, debug_mode)
             if model_type.is_sana():
                 return SanaEmbeddingSetup(train_device, temp_device, debug_mode)
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoEmbeddingSetup(train_device, temp_device, debug_mode)
 
     return None
 
@@ -309,7 +338,7 @@ def create_model_sampler(
         training_method: TrainingMethod = TrainingMethod.FINE_TUNE,
 ) -> BaseModelSampler:
     match training_method:
-        case TrainingMethod.FINE_TUNE:
+        case TrainingMethod.FINE_TUNE | TrainingMethod.LORA | TrainingMethod.EMBEDDING:
             if model_type.is_stable_diffusion():
                 return StableDiffusionSampler(train_device, temp_device, model, model_type)
             if model_type.is_stable_diffusion_xl():
@@ -324,39 +353,11 @@ def create_model_sampler(
                 return FluxSampler(train_device, temp_device, model, model_type)
             if model_type.is_sana():
                 return SanaSampler(train_device, temp_device, model, model_type)
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoSampler(train_device, temp_device, model, model_type)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionVaeSampler(train_device, temp_device, model, model_type)
-        case TrainingMethod.LORA:
-            if model_type.is_stable_diffusion():
-                return StableDiffusionSampler(train_device, temp_device, model, model_type)
-            if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLSampler(train_device, temp_device, model, model_type)
-            if model_type.is_wuerstchen():
-                return WuerstchenSampler(train_device, temp_device, model, model_type)
-            if model_type.is_pixart():
-                return PixArtAlphaSampler(train_device, temp_device, model, model_type)
-            if model_type.is_stable_diffusion_3():
-                return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
-            if model_type.is_flux():
-                return FluxSampler(train_device, temp_device, model, model_type)
-            if model_type.is_sana():
-                return SanaSampler(train_device, temp_device, model, model_type)
-        case TrainingMethod.EMBEDDING:
-            if model_type.is_stable_diffusion():
-                return StableDiffusionSampler(train_device, temp_device, model, model_type)
-            if model_type.is_stable_diffusion_xl():
-                return StableDiffusionXLSampler(train_device, temp_device, model, model_type)
-            if model_type.is_wuerstchen():
-                return WuerstchenSampler(train_device, temp_device, model, model_type)
-            if model_type.is_pixart():
-                return PixArtAlphaSampler(train_device, temp_device, model, model_type)
-            if model_type.is_stable_diffusion_3():
-                return StableDiffusion3Sampler(train_device, temp_device, model, model_type)
-            if model_type.is_flux():
-                return FluxSampler(train_device, temp_device, model, model_type)
-            if model_type.is_sana():
-                return SanaSampler(train_device, temp_device, model, model_type)
 
     return None
 
@@ -393,6 +394,8 @@ def create_data_loader(
                 return FluxBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
             if model_type.is_sana():
                 return SanaBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
+            if model_type.is_hunyuan_video():
+                return HunyuanVideoBaseDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
         case TrainingMethod.FINE_TUNE_VAE:
             if model_type.is_stable_diffusion():
                 return StableDiffusionFineTuneVaeDataLoader(train_device, temp_device, config, model, train_progress, is_validation)
@@ -1085,6 +1088,7 @@ def create_lr_scheduler(
         learning_rate_schedulers: list[LearningRateScheduler],
         warmup_steps: int | float,
         num_cycles: float,
+        min_factor: float,
         num_epochs: int,
         batch_size: int,
         approximate_epoch_length: int,
@@ -1103,44 +1107,85 @@ def create_lr_scheduler(
         warmup_steps = 0
 
     scheduler_steps = total_steps - warmup_steps
-    lr_lambdas = []
 
-    for learning_rate_scheduler in learning_rate_schedulers:
-        # Force schedule-free algorithms to constant schedule.
-        if config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper:
-            learning_rate_scheduler = LearningRateScheduler.CONSTANT
+    # Force schedule-free algorithms to constant schedule.
+    if config.optimizer.optimizer.is_schedule_free:
+        learning_rate_scheduler = LearningRateScheduler.CONSTANT
 
-        match learning_rate_scheduler:
-            case LearningRateScheduler.CONSTANT:
-                lr_lambda = lr_lambda_constant()
+    match learning_rate_scheduler:
+        case LearningRateScheduler.CONSTANT:
+            lr_lambda = lr_lambda_constant()
 
-            case LearningRateScheduler.LINEAR:
-                lr_lambda = lr_lambda_linear(
-                    scheduler_steps
-                )
+        case LearningRateScheduler.LINEAR:
+            lr_lambda = lr_lambda_linear(
+                scheduler_steps, min_factor
+            )
 
-            case LearningRateScheduler.COSINE:
-                lr_lambda = lr_lambda_cosine(
-                    scheduler_steps,
-                    eta_min
-                )
+        case LearningRateScheduler.COSINE:
+            lr_lambda = lr_lambda_cosine(
+                scheduler_steps, min_factor
+            )
 
-            case LearningRateScheduler.COSINE_WITH_RESTARTS:
-                lr_lambda = lr_lambda_cosine_with_restarts(
-                    scheduler_steps, num_cycles, eta_min
-                )
+        case LearningRateScheduler.COSINE_WITH_RESTARTS:
+            lr_lambda = lr_lambda_cosine_with_restarts(
+                scheduler_steps, num_cycles, min_factor
+            )
 
-            case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
-                lr_lambda = lr_lambda_cosine_with_hard_restarts(
-                    scheduler_steps, num_cycles, eta_min
-                )
-            case LearningRateScheduler.REX:
-                lr_lambda = lr_lambda_rex(
-                    scheduler_steps
-                )
-            case LearningRateScheduler.ADAFACTOR:
-                from transformers.optimization import AdafactorSchedule
-                return AdafactorSchedule(
+        case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
+            lr_lambda = lr_lambda_cosine_with_hard_restarts(
+                scheduler_steps, num_cycles, min_factor
+            )
+
+        case LearningRateScheduler.REX:
+            lr_lambda = lr_lambda_rex(
+                scheduler_steps, min_factor
+            )
+
+        case LearningRateScheduler.ADAFACTOR:
+            from transformers.optimization import AdafactorSchedule
+            return AdafactorSchedule(
+                optimizer,
+                initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
+            )
+        case LearningRateScheduler.CUSTOM:
+            # Special case. Unlike the others, we return from here.
+            if not config.custom_learning_rate_scheduler:
+                raise AssertionError("Must specify a class when using a custom LR scheduler.")
+            if "." not in config.custom_learning_rate_scheduler:
+                raise AssertionError("Custom class name must be in the format <module>.<class>")
+            klass = config.custom_learning_rate_scheduler.split(".")[-1]
+            module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
+            module = importlib.import_module(module)
+            klass = getattr(module, klass)
+            # Compile arguments into single dict.
+            args = {}
+            for pd in config.scheduler_params:
+                key = pd["key"]
+                value = pd["value"]
+                # Special values
+                match value:
+                    case "%LR%":
+                        value = config.learning_rate
+                    case "%EPOCHS%":
+                        value = num_epochs
+                    case "%STEPS_PER_EPOCH%":
+                        value = steps_per_epoch
+                    case "%TOTAL_STEPS%":
+                        value = total_steps
+                    case "%SCHEDULER_STEPS%":
+                        value = scheduler_steps
+                    case _:
+                        value = ast.literal_eval(value)
+                args[key] = value
+            scheduler = klass(optimizer=optimizer,
+                              last_epoch=int(global_step / gradient_accumulation_steps) - 1,
+                              **args)
+            if warmup_steps > 0:
+                warmup_scheduler = LambdaLR(
+                    optimizer=optimizer,
+                    lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
+                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                scheduler = SequentialLR(
                     optimizer,
                     initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
                 )
