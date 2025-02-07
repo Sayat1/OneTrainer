@@ -6,7 +6,7 @@ from modules.util.config.TrainConfig import TrainConfig
 from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
-from lycoris import create_lycoris, LycorisNetwork
+from lycoris import create_lycoris, LycorisNetwork,create_lycoris_from_weights
 import torch
 from itertools import chain
 
@@ -117,23 +117,26 @@ class StableDiffusionXLLoRASetup(
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
         create_unet = config.unet.train or state_dict_has_prefix(model.lora_state_dict, "lora_unet")
 
-        LycorisNetwork.LORA_PREFIX = "lora_te1"
-        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
-
-        LycorisNetwork.LORA_PREFIX = "lora_te2"
-        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
-
-        LycorisNetwork.LORA_PREFIX = "lora_unet"
-        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options)
-
         if model.lora_state_dict:
-            if create_te1:
-                model.text_encoder_1_lora.load_state_dict(model.lora_state_dict)
-            if create_te2:
-                model.text_encoder_2_lora.load_state_dict(model.lora_state_dict)
-            if create_unet:
-                model.unet_lora.load_state_dict(model.lora_state_dict)
+            LycorisNetwork.LORA_PREFIX = "lora_te1"
+            model.text_encoder_1_lora,_ = create_lycoris_from_weights(1.0, None, model.text_encoder_1, weights_sd=model.lora_state_dict) if create_te1 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_te2"
+            model.text_encoder_2_lora,_ = create_lycoris_from_weights(1.0, None, model.text_encoder_2, weights_sd=model.lora_state_dict) if create_te2 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_unet"
+            model.unet_lora,_ = create_lycoris_from_weights(1.0, None, model.unet, weights_sd=model.lora_state_dict)
+            
             model.lora_state_dict = None
+        else:
+            LycorisNetwork.LORA_PREFIX = "lora_te1"
+            model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_te2"
+            model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_unet"
+            model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options)
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
