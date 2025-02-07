@@ -331,6 +331,7 @@ class TrainConfig(BaseConfig):
     max_noising_strength: float
     noising_weight: float
     noising_bias: float
+    do_edm_style_training: bool
 
     # unet
     unet: TrainModelPartConfig
@@ -806,6 +807,8 @@ class TrainConfig(BaseConfig):
         data.append(("timestep_distribution", TimestepDistribution.UNIFORM, TimestepDistribution, False))
         data.append(("noising_weight", 0.0, float, False))
         data.append(("noising_bias", 0.0, float, False))
+        data.append(("do_edm_style_training", False, bool, False))
+        
 
         # unet
         unet = TrainModelPartConfig.default_values()

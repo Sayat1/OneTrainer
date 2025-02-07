@@ -230,6 +230,7 @@ class BaseStableDiffusionXLSetup(
             generator = torch.Generator(device=config.train_device)
             generator.manual_seed(batch_seed)
             rand = Random(batch_seed)
+            weighting = None
 
             is_align_prop_step = config.align_prop and (rand.random() < config.align_prop_probability)
 
@@ -391,12 +392,20 @@ class BaseStableDiffusionXLSetup(
                     config,
                 )
 
-                scaled_noisy_latent_image = self._add_noise_discrete(
-                    scaled_latent_image,
-                    latent_noise,
-                    timestep,
-                    model.noise_scheduler.betas,
-                )
+                if config.do_edm_style_training:
+                    timestep = model.noise_scheduler.timesteps[timestep]
+
+                # scaled_noisy_latent_image = self._add_noise_discrete(
+                #     scaled_latent_image,
+                #     latent_noise,
+                #     timestep,
+                #     model.noise_scheduler.betas,
+                # )
+                scaled_noisy_latent_image = model.noise_scheduler.add_noise(scaled_latent_image, latent_noise, timestep)
+                if config.do_edm_style_training:
+                    sigmas = self._get_sigmas(model.noise_scheduler, timestep, len(scaled_noisy_latent_image.shape), config, scaled_noisy_latent_image.dtype)
+                    inp_noisy_latents = scaled_noisy_latent_image / ((sigmas**2 + 1) ** 0.5)
+                    weighting = (sigmas**-2.0).float()
 
                 # original size of the image
                 original_height = batch['original_resolution'][0]
@@ -422,10 +431,11 @@ class BaseStableDiffusionXLSetup(
 
                 if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
                     latent_input = torch.concat(
-                        [scaled_noisy_latent_image, batch['latent_mask'], scaled_latent_conditioning_image], 1
+                        [inp_noisy_latents if config.do_edm_style_training else scaled_noisy_latent_image \
+                         , batch['latent_mask'], scaled_latent_conditioning_image], 1
                     )
                 else:
-                    latent_input = scaled_noisy_latent_image
+                    latent_input = inp_noisy_latents if config.do_edm_style_training else scaled_noisy_latent_image
 
                 added_cond_kwargs = {"text_embeds": pooled_text_encoder_2_output, "time_ids": add_time_ids}
                 predicted_latent_noise = model.unet(
@@ -438,19 +448,26 @@ class BaseStableDiffusionXLSetup(
                 model_output_data = {}
 
                 if model.noise_scheduler.config.prediction_type == 'epsilon':
+                    if config.do_edm_style_training:
+                        predicted_latent_noise = predicted_latent_noise * (-sigmas) + scaled_noisy_latent_image
+                        
                     model_output_data = {
                         'loss_type': 'target',
                         'timestep': timestep,
                         'predicted': predicted_latent_noise,
-                        'target': latent_noise,
+                        'target': scaled_latent_image if config.do_edm_style_training else latent_noise,
                     }
                 elif model.noise_scheduler.config.prediction_type == 'v_prediction':
+                    if config.do_edm_style_training:
+                        predicted_latent_noise = predicted_latent_noise * (-sigmas / (sigmas**2 + 1) ** 0.5) + (
+                                            scaled_noisy_latent_image / (sigmas**2 + 1)
+                                        )
                     target_velocity = model.noise_scheduler.get_velocity(scaled_latent_image, latent_noise, timestep)
                     model_output_data = {
                         'loss_type': 'target',
                         'timestep': timestep,
                         'predicted': predicted_latent_noise,
-                        'target': target_velocity,
+                        'target': scaled_latent_image if config.do_edm_style_training else target_velocity,
                     }
 
             if config.debug_mode:
@@ -537,6 +554,8 @@ class BaseStableDiffusionXLSetup(
                         )
 
         model_output_data['prediction_type'] = model.noise_scheduler.config.prediction_type
+        if weighting is not None:
+            model_output_data['weighting'] = weighting
         return model_output_data
 
     def calculate_loss(

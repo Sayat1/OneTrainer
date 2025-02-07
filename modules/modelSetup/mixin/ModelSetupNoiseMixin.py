@@ -48,6 +48,26 @@ class ModelSetupNoiseMixin(metaclass=ABCMeta):
 
         return noise
 
+    def _get_sigmas(
+            self, 
+            noise_scheduler,
+            timesteps,
+            n_dim,
+            config,
+            dtype
+    ):
+        sigmas = noise_scheduler.sigmas.to(device=config.train_device, dtype=dtype)
+        schedule_timesteps = noise_scheduler.timesteps.to(config.train_device)
+        timesteps = timesteps.to(config.train_device)
+
+        step_indices = [(schedule_timesteps == t).nonzero().item() for t in timesteps]
+
+        sigma = sigmas[step_indices].flatten()
+        while len(sigma.shape) < n_dim:
+            sigma = sigma.unsqueeze(-1)
+        return sigma
+
+
     def _get_timestep_discrete(
             self,
             num_train_timesteps: int,

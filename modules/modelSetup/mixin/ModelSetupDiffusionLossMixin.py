@@ -80,12 +80,15 @@ class ModelSetupDiffusionLossMixin(metaclass=ABCMeta):
 
         # MSE/L2 Loss
         if config.mse_strength != 0:
-            losses += masked_losses(
-                losses=F.mse_loss(
+            loss = F.mse_loss(
                     data['predicted'].to(dtype=torch.float32),
                     data['target'].to(dtype=torch.float32),
                     reduction='none'
-                ),
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += masked_losses(
+                losses=loss,
                 mask=batch['latent_mask'].to(dtype=torch.float32),
                 unmasked_weight=config.unmasked_weight,
                 normalize_masked_area_loss=config.normalize_masked_area_loss,
@@ -93,12 +96,15 @@ class ModelSetupDiffusionLossMixin(metaclass=ABCMeta):
 
         # MAE/L1 Loss
         if config.mae_strength != 0:
-            losses += masked_losses(
-                losses=F.l1_loss(
+            loss = F.l1_loss(
                     data['predicted'].to(dtype=torch.float32),
                     data['target'].to(dtype=torch.float32),
                     reduction='none'
-                ),
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += masked_losses(
+                losses=loss,
                 mask=batch['latent_mask'].to(dtype=torch.float32),
                 unmasked_weight=config.unmasked_weight,
                 normalize_masked_area_loss=config.normalize_masked_area_loss,
@@ -106,11 +112,14 @@ class ModelSetupDiffusionLossMixin(metaclass=ABCMeta):
 
         # log-cosh Loss
         if config.log_cosh_strength != 0:
-            losses += masked_losses(
-                losses=self.__log_cosh_loss(
+            loss = self.__log_cosh_loss(
                     data['predicted'].to(dtype=torch.float32),
                     data['target'].to(dtype=torch.float32)
-                ),
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += masked_losses(
+                losses=loss,
                 mask=batch['latent_mask'].to(dtype=torch.float32),
                 unmasked_weight=config.unmasked_weight,
                 normalize_masked_area_loss=config.normalize_masked_area_loss,
@@ -118,15 +127,18 @@ class ModelSetupDiffusionLossMixin(metaclass=ABCMeta):
 
         # VB loss
         if config.vb_loss_strength != 0 and 'predicted_var_values' in data and self.__coefficients is not None:
-            losses += masked_losses(
-                losses=vb_losses(
+            loss = vb_losses(
                     coefficients=self.__coefficients,
                     x_0=data['scaled_latent_image'].to(dtype=torch.float32),
                     x_t=data['noisy_latent_image'].to(dtype=torch.float32),
                     t=data['timestep'],
                     predicted_eps=data['predicted'].to(dtype=torch.float32),
                     predicted_var_values=data['predicted_var_values'].to(dtype=torch.float32),
-                ),
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += masked_losses(
+                losses=loss,
                 mask=batch['latent_mask'].to(dtype=torch.float32),
                 unmasked_weight=config.unmasked_weight,
                 normalize_masked_area_loss=config.normalize_masked_area_loss,
@@ -146,37 +158,49 @@ class ModelSetupDiffusionLossMixin(metaclass=ABCMeta):
 
         # MSE/L2 Loss
         if config.mse_strength != 0:
-            losses += F.mse_loss(
-                data['predicted'].to(dtype=torch.float32),
-                data['target'].to(dtype=torch.float32),
-                reduction='none'
-            ).mean(mean_dim) * config.mse_strength
+            loss = F.mse_loss(
+                    data['predicted'].to(dtype=torch.float32),
+                    data['target'].to(dtype=torch.float32),
+                    reduction='none'
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += loss.mean(mean_dim) * config.mse_strength
 
         # MAE/L1 Loss
         if config.mae_strength != 0:
-            losses += F.l1_loss(
+            loss = F.l1_loss(
                 data['predicted'].to(dtype=torch.float32),
                 data['target'].to(dtype=torch.float32),
                 reduction='none'
-            ).mean(mean_dim) * config.mae_strength
+            )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += loss.mean(mean_dim) * config.mae_strength
 
         # log-cosh Loss
         if config.log_cosh_strength != 0:
-            losses += self.__log_cosh_loss(
+            loss = self.__log_cosh_loss(
                     data['predicted'].to(dtype=torch.float32),
                     data['target'].to(dtype=torch.float32)
-                ).mean(mean_dim) * config.log_cosh_strength
+                )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += loss.mean(mean_dim) * config.log_cosh_strength
 
         # VB loss
         if config.vb_loss_strength != 0 and 'predicted_var_values' in data:
-            losses += vb_losses(
+            loss = vb_losses(
                 coefficients=self.__coefficients,
                 x_0=data['scaled_latent_image'].to(dtype=torch.float32),
                 x_t=data['noisy_latent_image'].to(dtype=torch.float32),
                 t=data['timestep'],
                 predicted_eps=data['predicted'].to(dtype=torch.float32),
                 predicted_var_values=data['predicted_var_values'].to(dtype=torch.float32),
-            ).mean(mean_dim) * config.vb_loss_strength
+            )
+            if 'weighting' in data:
+                loss = loss * data['weighting']
+            losses += loss.mean(mean_dim) * config.vb_loss_strength
 
         if config.masked_training and config.normalize_masked_area_loss:
             clamped_mask = torch.clamp(batch['latent_mask'], config.unmasked_weight, 1)

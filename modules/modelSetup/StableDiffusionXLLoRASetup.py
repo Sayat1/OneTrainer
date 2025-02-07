@@ -152,6 +152,11 @@ class StableDiffusionXLLoRASetup(
             model.rescale_noise_scheduler_to_zero_terminal_snr()
             model.force_v_prediction()
 
+        if config.do_edm_style_training:
+            from modules.util import create
+            from modules.util.enum.NoiseScheduler import NoiseScheduler
+            model.noise_scheduler = create.create_noise_scheduler(NoiseScheduler.EULER, model.noise_scheduler, 1000)
+
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
         self._setup_additional_embeddings(model, config)
