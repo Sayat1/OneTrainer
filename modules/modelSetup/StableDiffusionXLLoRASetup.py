@@ -153,9 +153,8 @@ class StableDiffusionXLLoRASetup(
             model.force_v_prediction()
 
         if config.do_edm_style_training:
-            from modules.util import create
-            from modules.util.enum.NoiseScheduler import NoiseScheduler
-            model.noise_scheduler = create.create_noise_scheduler(NoiseScheduler.EULER, model.noise_scheduler, 1000)
+            from diffusers import EulerDiscreteScheduler
+            model.noise_scheduler = EulerDiscreteScheduler(1000, beta_end=0.012, beta_schedule="scaled_linear", beta_start=0.00085, timestep_spacing="trailing")
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)

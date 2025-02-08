@@ -612,7 +612,7 @@ class GenericTrainer(BaseTrainer):
         scaler = create_grad_scaler() if enable_grad_scaling(self.config.train_dtype, self.parameters) else None
 
         self.__apply_fused_back_pass(scaler)
-
+        print(self.model.noise_scheduler)
         # False if the model gradients are all None, True otherwise
         # This is used to schedule sampling only when the gradients don't take up any space
         has_gradient = False
