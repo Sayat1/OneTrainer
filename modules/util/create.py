@@ -996,8 +996,8 @@ def create_optimizer(
                 lr=config.learning_rate,
                 betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
                        optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.99),
-                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
-                weight_decouple=optimizer_config.decoupled_decay if optimizer_config.decoupled_decay is not None else False,
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.01,
+                weight_decouple=optimizer_config.decoupled_decay if optimizer_config.decoupled_decay is not None else True,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
             )
 
