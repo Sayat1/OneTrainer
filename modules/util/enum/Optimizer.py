@@ -64,6 +64,7 @@ class Optimizer(Enum):
     TIGER = 'TIGER'
     AIDA = 'AIDA'
     SOAP = 'SOAP'
+    StableAdamW = 'StableAdamW'
 
     @property
     def is_adaptive(self):

@@ -988,6 +988,18 @@ def create_optimizer(
                 cautious=optimizer_config.cautious if optimizer_config.cautious is not None else False,
                 eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-6,
             )
+        
+        case Optimizer.StableAdamW:
+            from pytorch_optimizer.optimizer.adamw import StableAdamW
+            optimizer = StableAdamW(
+                params=parameters,
+                lr=config.learning_rate,
+                betas=(optimizer_config.beta1 if optimizer_config.beta1 is not None else 0.9,
+                       optimizer_config.beta2 if optimizer_config.beta2 is not None else 0.99),
+                weight_decay=optimizer_config.weight_decay if optimizer_config.weight_decay is not None else 0.0,
+                weight_decouple=optimizer_config.decoupled_decay if optimizer_config.decoupled_decay is not None else False,
+                eps=optimizer_config.eps if optimizer_config.eps is not None else 1e-8,
+            )
 
 
     if state_dict is not None and optimizer is not None:
