@@ -39,7 +39,7 @@ class ConceptImageConfig(BaseConfig):
     enable_random_mask_rotate_crop: bool
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(ConceptImageConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -86,9 +86,20 @@ class ConceptTextConfig(BaseConfig):
     enable_tag_shuffling: bool
     tag_delimiter: str
     keep_tags_count: int
+    tag_dropout_enable: bool
+    tag_dropout_mode: str
+    tag_dropout_probability: float
+    tag_dropout_special_tags_mode: str
+    tag_dropout_special_tags: str
+    tag_dropout_special_tags_regex: bool
+    caps_randomize_enable: bool
+    caps_randomize_probability: float
+    caps_randomize_mode: str
+    caps_randomize_lowercase: bool
+
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(ConceptTextConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -99,6 +110,16 @@ class ConceptTextConfig(BaseConfig):
         data.append(("enable_tag_shuffling", False, bool, False))
         data.append(("tag_delimiter", ",", str, False))
         data.append(("keep_tags_count", 1, int, False))
+        data.append(("tag_dropout_enable", False, bool, False))
+        data.append(("tag_dropout_mode", "FULL", str, False))
+        data.append(("tag_dropout_probability", 0.0, float, False))
+        data.append(("tag_dropout_special_tags_mode", "NONE", str, False))
+        data.append(("tag_dropout_special_tags", "", str, False))
+        data.append(("tag_dropout_special_tags_regex", False, bool, False))
+        data.append(("caps_randomize_enable", False, bool, False))
+        data.append(("caps_randomize_mode", "capslock, title, first, random", str, False))
+        data.append(("caps_randomize_probability", 0.0, float, False))
+        data.append(("caps_randomize_lowercase", False, bool, False))
 
         return ConceptTextConfig(data)
 
@@ -108,17 +129,19 @@ class ConceptConfig(BaseConfig):
     path: str
     seed: int
     enabled: bool
+    validation_concept: bool
     include_subdirectories: bool
     image_variations: int
     text_variations: int
     repeats: float
     loss_weight: float
+    concept_stats: dict
 
     image: ConceptImageConfig
     text: ConceptTextConfig
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(ConceptConfig, self).__init__(
+        super().__init__(
             data,
             config_version=1,
             config_migrations={
@@ -137,7 +160,7 @@ class ConceptConfig(BaseConfig):
         return migrated_data
 
     def to_dict(self):
-        as_dict = super(ConceptConfig, self).to_dict()
+        as_dict = super().to_dict()
         as_dict['image'] = self.image.to_dict()
         as_dict['text'] = self.text.to_dict()
         return as_dict
@@ -153,11 +176,13 @@ class ConceptConfig(BaseConfig):
         data.append(("path", "", str, False))
         data.append(("seed", random.randint(-(1 << 30), 1 << 30), int, False))
         data.append(("enabled", True, bool, False))
+        data.append(("validation_concept", False, bool, False))
         data.append(("include_subdirectories", False, bool, False))
         data.append(("image_variations", 1, int, False))
         data.append(("text_variations", 1, int, False))
         data.append(("balancing", 1.0, float, False))
         data.append(("balancing_strategy", BalancingStrategy.REPEATS, BalancingStrategy, False))
         data.append(("loss_weight", 1.0, float, False))
+        data.append(("concept_stats", {}, dict, False))
 
         return ConceptConfig(data)

@@ -1,3 +1,4 @@
+import contextlib
 import json
 from abc import ABCMeta
 
@@ -8,6 +9,9 @@ from safetensors import safe_open
 
 
 class ModelSpecModelLoaderMixin(metaclass=ABCMeta):
+    def __init__(self):
+        super().__init__()
+
     def _default_model_spec_name(
             self,
             model_type: ModelType,
@@ -29,11 +33,8 @@ class ModelSpecModelLoaderMixin(metaclass=ABCMeta):
             model_spec = ModelSpec()
 
         if safetensors_file_name:
-            try:
-                with safe_open(safetensors_file_name, framework="pt") as f:
-                    if "modelspec.sai_model_spec" in f.metadata():
-                        model_spec = ModelSpec.from_dict(f.metadata())
-            except:
-                pass
+            with contextlib.suppress(Exception), safe_open(safetensors_file_name, framework="pt") as f:
+                if "modelspec.sai_model_spec" in f.metadata():
+                    model_spec = ModelSpec.from_dict(f.metadata())
 
         return model_spec

@@ -1,12 +1,13 @@
-import os
-from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from modules.model.StableDiffusionModel import StableDiffusionModel
-from modules.modelSampler.BaseModelSampler import BaseModelSampler
+from modules.modelSampler.BaseModelSampler import BaseModelSampler, ModelSamplerOutput
 from modules.util.config.SampleConfig import SampleConfig
+from modules.util.enum.AudioFormat import AudioFormat
+from modules.util.enum.FileType import FileType
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
+from modules.util.enum.VideoFormat import VideoFormat
 
 import torch
 from torchvision.transforms import transforms
@@ -22,7 +23,7 @@ class StableDiffusionVaeSampler(BaseModelSampler):
             model: StableDiffusionModel,
             model_type: ModelType,
     ):
-        super(StableDiffusionVaeSampler, self).__init__(train_device, temp_device)
+        super().__init__(train_device, temp_device)
 
         self.model = model
         self.model_type = model_type
@@ -32,14 +33,23 @@ class StableDiffusionVaeSampler(BaseModelSampler):
             sample_config: SampleConfig,
             destination: str,
             image_format: ImageFormat,
-            on_sample: Callable[[Image], None] = lambda _: None,
+            video_format: VideoFormat,
+            audio_format: AudioFormat,
+            on_sample: Callable[[ModelSamplerOutput], None] = lambda _: None,
             on_update_progress: Callable[[int, int], None] = lambda _, __: None,
     ):
         # TODO: this is reusing the prompt parameters as the image path, think of a better solution
         image = Image.open(sample_config.prompt)
         image = image.convert("RGB")
+        # TODO: figure out better set of transformations for resize and/or implement way to configure them as per-sample toggle
 
-        t_in = transforms.ToTensor()
+        scale = sample_config.width if sample_config.width > sample_config.height else sample_config.height
+
+        t_in = transforms.Compose([
+            transforms.Resize(scale),
+            transforms.CenterCrop([sample_config.height, sample_config.width]),
+            transforms.ToTensor()
+        ])
         image_tensor = t_in(image).to(device=self.train_device, dtype=self.model.vae.dtype)
         image_tensor = image_tensor * 2 - 1
 
@@ -55,7 +65,14 @@ class StableDiffusionVaeSampler(BaseModelSampler):
         image_tensor = image_tensor.clamp(0, 1)
 
         t_out = transforms.ToPILImage()
-        image = t_out(image_tensor)
+        sampler_output = ModelSamplerOutput(
+            file_type=FileType.IMAGE,
+            data=t_out(image_tensor.float()),
+        )
 
-        os.makedirs(Path(destination).parent.absolute(), exist_ok=True)
-        image.save(destination)
+        self.save_sampler_output(
+            sampler_output, destination,
+            image_format, video_format, audio_format,
+        )
+
+        on_sample(sampler_output)

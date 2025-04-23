@@ -1,7 +1,7 @@
 from modules.model.StableDiffusionModel import StableDiffusionModel
 from modules.modelSetup.BaseStableDiffusionSetup import BaseStableDiffusionSetup
 from modules.util.config.TrainConfig import TrainConfig
-from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
+from modules.util.NamedParameterGroup import NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.TrainProgress import TrainProgress
 
@@ -17,7 +17,7 @@ class StableDiffusionEmbeddingSetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(StableDiffusionEmbeddingSetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -30,15 +30,10 @@ class StableDiffusionEmbeddingSetup(
     ) -> NamedParameterGroupCollection:
         parameter_group_collection = NamedParameterGroupCollection()
 
-        for parameter, placeholder, name in zip(model.embedding_wrapper.additional_embeddings,
-                                                model.embedding_wrapper.additional_embedding_placeholders,
-                                                model.embedding_wrapper.additional_embedding_names):
-            parameter_group_collection.add_group(NamedParameterGroup(
-                unique_name=f"embeddings/{name}",
-                display_name=f"embeddings/{placeholder}",
-                parameters=[parameter],
-                learning_rate=config.embedding_learning_rate,
-            ))
+        self._add_embedding_param_groups(
+            model.all_text_encoder_embeddings(), parameter_group_collection, config.embedding_learning_rate,
+            "embeddings"
+        )
 
         return parameter_group_collection
 
@@ -47,18 +42,10 @@ class StableDiffusionEmbeddingSetup(
             model: StableDiffusionModel,
             config: TrainConfig,
     ):
+        self._setup_embeddings_requires_grad(model, config)
         model.text_encoder.requires_grad_(False)
         model.vae.requires_grad_(False)
         model.unet.requires_grad_(False)
-
-        model.embedding.text_encoder_vector.requires_grad_(True)
-
-        for i, embedding in enumerate(model.additional_embeddings):
-            embedding_config = config.additional_embeddings[i]
-            train_embedding = \
-                embedding_config.train \
-                and not self.stop_additional_embedding_training_elapsed(embedding_config, model.train_progress, i)
-            embedding.text_encoder_vector.requires_grad_(train_embedding)
 
     def setup_model(
             self,
@@ -72,21 +59,18 @@ class StableDiffusionEmbeddingSetup(
             model.force_v_prediction()
 
         self._remove_added_embeddings_from_tokenizer(model.tokenizer)
-        self._setup_additional_embeddings(model, config)
-        self._setup_embedding(model, config)
+        self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
 
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self._setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config), self.train_device)
 
     def setup_train_device(
             self,
             model: StableDiffusionModel,
             config: TrainConfig,
     ):
-        vae_on_train_device = self.debug_mode or config.align_prop_loss or not config.latent_caching
+        vae_on_train_device = self.debug_mode or not config.latent_caching
 
         model.text_encoder_to(self.train_device)
         model.vae_to(self.train_device if vae_on_train_device else self.temp_device)
@@ -104,5 +88,6 @@ class StableDiffusionEmbeddingSetup(
             train_progress: TrainProgress
     ):
         if config.preserve_embedding_norm:
+            self._normalize_output_embeddings(model.all_text_encoder_embeddings())
             model.embedding_wrapper.normalize_embeddings()
         self.__setup_requires_grad(model, config)

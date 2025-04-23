@@ -14,7 +14,7 @@ import customtkinter as ctk
 class ModelTab:
 
     def __init__(self, master, train_config: TrainConfig, ui_state: UIState):
-        super(ModelTab, self).__init__()
+        super().__init__()
 
         self.master = master
         self.train_config = train_config
@@ -50,6 +50,12 @@ class ModelTab:
             self.__setup_wuerstchen_ui()
         elif self.train_config.model_type.is_pixart():
             self.__setup_pixart_alpha_ui()
+        elif self.train_config.model_type.is_flux():
+            self.__setup_flux_ui()
+        elif self.train_config.model_type.is_sana():
+            self.__setup_sana_ui()
+        elif self.train_config.model_type.is_hunyuan_video():
+            self.__setup_hunyuan_video_ui()
 
     def __setup_stable_diffusion_ui(self):
         row = 0
@@ -67,7 +73,7 @@ class ModelTab:
                 TrainingMethod.FINE_TUNE,
                 TrainingMethod.FINE_TUNE_VAE,
             ],
-            allow_checkpoint=True,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
         )
 
     def __setup_stable_diffusion_3_ui(self):
@@ -84,11 +90,26 @@ class ModelTab:
         row = self.__create_output_components(
             row,
             allow_safetensors=True,
-            allow_diffusers=self.train_config.training_method in [
-                TrainingMethod.FINE_TUNE,
-                TrainingMethod.FINE_TUNE_VAE,
-            ],
-            allow_checkpoint=True,
+            allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
+        )
+
+    def __setup_flux_ui(self):
+        row = 0
+        row = self.__create_base_dtype_components(row)
+        row = self.__create_base_components(
+            row,
+            has_prior=True,
+            allow_override_prior=True,
+            has_text_encoder_1=True,
+            has_text_encoder_2=True,
+            has_vae=True,
+        )
+        row = self.__create_output_components(
+            row,
+            allow_safetensors=True,
+            allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
         )
 
     def __setup_stable_diffusion_xl_ui(self):
@@ -105,7 +126,7 @@ class ModelTab:
             row,
             allow_safetensors=True,
             allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
-            allow_checkpoint=True,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
         )
 
     def __setup_wuerstchen_ui(self):
@@ -124,7 +145,7 @@ class ModelTab:
             allow_safetensors=self.train_config.training_method != TrainingMethod.FINE_TUNE
                               or self.train_config.model_type.is_stable_cascade(),
             allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
-            allow_checkpoint=self.train_config.training_method != TrainingMethod.FINE_TUNE,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
         )
 
     def __setup_pixart_alpha_ui(self):
@@ -140,10 +161,67 @@ class ModelTab:
             row,
             allow_safetensors=True,
             allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
-            allow_checkpoint=True,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
         )
 
+    def __setup_sana_ui(self):
+        row = 0
+        row = self.__create_base_dtype_components(row)
+        row = self.__create_base_components(
+            row,
+            has_prior=True,
+            has_text_encoder=True,
+            has_vae=True,
+        )
+        row = self.__create_output_components(
+            row,
+            allow_safetensors=self.train_config.training_method != TrainingMethod.FINE_TUNE,
+            allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
+        )
+
+    def __setup_hunyuan_video_ui(self):
+        row = 0
+        row = self.__create_base_dtype_components(row)
+        row = self.__create_base_components(
+            row,
+            has_prior=True,
+            has_text_encoder_1=True,
+            has_text_encoder_2=True,
+            has_vae=True,
+        )
+        row = self.__create_output_components(
+            row,
+            allow_safetensors=True,
+            allow_diffusers=self.train_config.training_method == TrainingMethod.FINE_TUNE,
+            allow_legacy_safetensors=self.train_config.training_method == TrainingMethod.LORA,
+        )
+
+    def __create_dtype_options(self, include_none:bool=True) -> list[tuple[str, DataType]]:
+        options = [
+            ("float32", DataType.FLOAT_32),
+            ("bfloat16", DataType.BFLOAT_16),
+            ("float16", DataType.FLOAT_16),
+            ("float8", DataType.FLOAT_8),
+            # ("int8", DataType.INT_8),  # TODO: reactivate when the int8 implementation is fixed in bitsandbytes: https://github.com/bitsandbytes-foundation/bitsandbytes/issues/1332
+            ("nfloat4", DataType.NFLOAT_4),
+        ]
+
+        if include_none:
+            options.insert(0, ("", DataType.NONE))
+
+        return options
+
     def __create_base_dtype_components(self, row: int) -> int:
+        # huggingface token
+        components.label(self.scroll_frame, row, 0, "Hugging Face Token",
+                         tooltip="Enter your Hugging Face access token if you have used a protected Hugging Face repository below.\nThis value is stored separately, not saved to your configuration file. "
+                                 "Go to https://huggingface.co/settings/tokens to create an access token.",
+                         wide_tooltip=True)
+        components.entry(self.scroll_frame, row, 1, self.ui_state, "secrets.huggingface_token")
+
+        row += 1
+
         # base model
         components.label(self.scroll_frame, row, 0, "Base Model",
                          tooltip="Filename, directory or Hugging Face repository of the base model")
@@ -155,12 +233,8 @@ class ModelTab:
         # weight dtype
         components.label(self.scroll_frame, row, 3, "Weight Data Type",
                          tooltip="The base model weight data type used for training. This can reduce memory consumption, but reduces precision")
-        components.options_kv(self.scroll_frame, row, 4, [
-            ("float32", DataType.FLOAT_32),
-            ("bfloat16", DataType.BFLOAT_16),
-            ("float16", DataType.FLOAT_16),
-            ("float8", DataType.FLOAT_8),
-        ], self.ui_state, "weight_dtype")
+        components.options_kv(self.scroll_frame, row, 4, self.__create_dtype_options(False),
+                              self.ui_state, "weight_dtype")
 
         row += 1
 
@@ -182,13 +256,8 @@ class ModelTab:
             # unet weight dtype
             components.label(self.scroll_frame, row, 3, "Override UNet Data Type",
                              tooltip="Overrides the unet weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "unet.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4, self.__create_dtype_options(),
+                                  self.ui_state, "unet.weight_dtype")
 
             row += 1
 
@@ -196,7 +265,7 @@ class ModelTab:
             if allow_override_prior:
                 # prior model
                 components.label(self.scroll_frame, row, 0, "Prior Model",
-                                 tooltip="Filename, directory or Hugging Face repository of the prior model")
+                                 tooltip="Filename, directory or Hugging Face repository of the prior model. For Flux, it must be a safetensors file that only contains the transformer.")
                 components.file_entry(
                     self.scroll_frame, row, 1, self.ui_state, "prior.model_name",
                     path_modifier=lambda x: Path(x).parent.absolute() if x.endswith(".json") else x
@@ -205,13 +274,8 @@ class ModelTab:
             # prior weight dtype
             components.label(self.scroll_frame, row, 3, "Override Prior Data Type",
                              tooltip="Overrides the prior weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "prior.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "prior.weight_dtype")
 
             row += 1
 
@@ -219,13 +283,8 @@ class ModelTab:
             # text encoder weight dtype
             components.label(self.scroll_frame, row, 3, "Override Text Encoder Data Type",
                              tooltip="Overrides the text encoder weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "text_encoder.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "text_encoder.weight_dtype")
 
             row += 1
 
@@ -233,13 +292,8 @@ class ModelTab:
             # text encoder 1 weight dtype
             components.label(self.scroll_frame, row, 3, "Override Text Encoder 1 Data Type",
                              tooltip="Overrides the text encoder 1 weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "text_encoder.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "text_encoder.weight_dtype")
 
             row += 1
 
@@ -247,13 +301,8 @@ class ModelTab:
             # text encoder 2 weight dtype
             components.label(self.scroll_frame, row, 3, "Override Text Encoder 2 Data Type",
                              tooltip="Overrides the text encoder 2 weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "text_encoder_2.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "text_encoder_2.weight_dtype")
 
             row += 1
 
@@ -261,13 +310,8 @@ class ModelTab:
             # text encoder 3 weight dtype
             components.label(self.scroll_frame, row, 3, "Override Text Encoder 3 Data Type",
                              tooltip="Overrides the text encoder 3 weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "text_encoder_3.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "text_encoder_3.weight_dtype")
 
             row += 1
 
@@ -283,13 +327,8 @@ class ModelTab:
             # vae weight dtype
             components.label(self.scroll_frame, row, 3, "Override VAE Data Type",
                              tooltip="Overrides the vae weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "vae.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "vae.weight_dtype")
 
             row += 1
 
@@ -307,13 +346,8 @@ class ModelTab:
         # effnet encoder weight dtype
         components.label(self.scroll_frame, row, 3, "Override Effnet Encoder Data Type",
                          tooltip="Overrides the effnet encoder weight data type")
-        components.options_kv(self.scroll_frame, row, 4, [
-            ("", DataType.NONE),
-            ("float32", DataType.FLOAT_32),
-            ("bfloat16", DataType.BFLOAT_16),
-            ("float16", DataType.FLOAT_16),
-            ("float8", DataType.FLOAT_8),
-        ], self.ui_state, "effnet_encoder.weight_dtype")
+        components.options_kv(self.scroll_frame, row, 4, self.__create_dtype_options(),
+                              self.ui_state, "effnet_encoder.weight_dtype")
 
         row += 1
 
@@ -335,13 +369,8 @@ class ModelTab:
         # decoder weight dtype
         components.label(self.scroll_frame, row, 3, "Override Decoder Data Type",
                          tooltip="Overrides the decoder weight data type")
-        components.options_kv(self.scroll_frame, row, 4, [
-            ("", DataType.NONE),
-            ("float32", DataType.FLOAT_32),
-            ("bfloat16", DataType.BFLOAT_16),
-            ("float16", DataType.FLOAT_16),
-            ("float8", DataType.FLOAT_8),
-        ], self.ui_state, "decoder.weight_dtype")
+        components.options_kv(self.scroll_frame, row, 4, self.__create_dtype_options(),
+                              self.ui_state, "decoder.weight_dtype")
 
         row += 1
 
@@ -349,26 +378,16 @@ class ModelTab:
             # decoder text encoder weight dtype
             components.label(self.scroll_frame, row, 3, "Override Decoder Text Encoder Data Type",
                              tooltip="Overrides the decoder text encoder weight data type")
-            components.options_kv(self.scroll_frame, row, 4, [
-                ("", DataType.NONE),
-                ("float32", DataType.FLOAT_32),
-                ("bfloat16", DataType.BFLOAT_16),
-                ("float16", DataType.FLOAT_16),
-                ("float8", DataType.FLOAT_8),
-            ], self.ui_state, "decoder_text_encoder.weight_dtype")
+            components.options_kv(self.scroll_frame, row, 4,  self.__create_dtype_options(),
+                                  self.ui_state, "decoder_text_encoder.weight_dtype")
 
             row += 1
 
         # decoder vqgan weight dtype
         components.label(self.scroll_frame, row, 3, "Override Decoder VQGAN Data Type",
                          tooltip="Overrides the decoder vqgan weight data type")
-        components.options_kv(self.scroll_frame, row, 4, [
-            ("", DataType.NONE),
-            ("float32", DataType.FLOAT_32),
-            ("bfloat16", DataType.BFLOAT_16),
-            ("float16", DataType.FLOAT_16),
-            ("float8", DataType.FLOAT_8),
-        ], self.ui_state, "decoder_vqgan.weight_dtype")
+        components.options_kv(self.scroll_frame, row, 4, self.__create_dtype_options(),
+                              self.ui_state, "decoder_vqgan.weight_dtype")
 
         row += 1
 
@@ -379,7 +398,7 @@ class ModelTab:
             row: int,
             allow_safetensors: bool = False,
             allow_diffusers: bool = False,
-            allow_checkpoint: bool = False,
+            allow_legacy_safetensors: bool = False,
     ) -> int:
         # output model destination
         components.label(self.scroll_frame, row, 0, "Model Output Destination",
@@ -394,6 +413,7 @@ class ModelTab:
             ("float32", DataType.FLOAT_32),
             ("bfloat16", DataType.BFLOAT_16),
             ("float8", DataType.FLOAT_8),
+            ("nfloat4", DataType.NFLOAT_4),
         ], self.ui_state, "output_dtype")
 
         row += 1
@@ -404,8 +424,8 @@ class ModelTab:
             formats.append(("Safetensors", ModelFormat.SAFETENSORS))
         if allow_diffusers:
             formats.append(("Diffusers", ModelFormat.DIFFUSERS))
-        if allow_checkpoint:
-            formats.append(("Checkpoint", ModelFormat.CKPT))
+        # if allow_legacy_safetensors:
+        #     formats.append(("Legacy Safetensors", ModelFormat.LEGACY_SAFETENSORS))
 
         components.label(self.scroll_frame, row, 0, "Output Format",
                          tooltip="Format to use when saving the output model")

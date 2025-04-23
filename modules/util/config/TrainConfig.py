@@ -1,16 +1,19 @@
 import json
+import os
 import uuid
 from copy import deepcopy
 from typing import Any
 
 from modules.util.config.BaseConfig import BaseConfig
+from modules.util.config.CloudConfig import CloudConfig
 from modules.util.config.ConceptConfig import ConceptConfig
 from modules.util.config.SampleConfig import SampleConfig
-from modules.util.enum.AlignPropLoss import AlignPropLoss
-from modules.util.enum.AttentionMechanism import AttentionMechanism
+from modules.util.config.SecretsConfig import SecretsConfig
+from modules.util.enum.AudioFormat import AudioFormat
 from modules.util.enum.ConfigPart import ConfigPart
 from modules.util.enum.DataType import DataType
 from modules.util.enum.EMAMode import EMAMode
+from modules.util.enum.GradientCheckpointingMethod import GradientCheckpointingMethod
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.LearningRateScaler import LearningRateScaler
 from modules.util.enum.LearningRateScheduler import LearningRateScheduler
@@ -19,11 +22,13 @@ from modules.util.enum.LossWeight import LossWeight
 from modules.util.enum.ModelFormat import ModelFormat
 from modules.util.enum.ModelType import ModelType, PeftType
 from modules.util.enum.Optimizer import Optimizer
+from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.NoiseScheduler import NoiseScheduler
 from modules.util.enum.TimestepDistribution import TimestepDistribution
 from modules.util.enum.TimeUnit import TimeUnit
 from modules.util.enum.TrainingMethod import TrainingMethod
 from modules.util.enum.LoraType import LoraType
+from modules.util.enum.VideoFormat import VideoFormat
 from modules.util.ModelNames import EmbeddingName, ModelNames
 from modules.util.ModelWeightDtypes import ModelWeightDtypes
 from modules.util.torch_util import default_device
@@ -56,6 +61,7 @@ class TrainOptimizerConfig(BaseConfig):
     fused_back_pass: bool
     growth_rate: float
     initial_accumulator_value: int
+    initial_accumulator: float
     is_paged: bool
     log_every: int
     lr_decay: float
@@ -66,7 +72,7 @@ class TrainOptimizerConfig(BaseConfig):
     nesterov: bool
     no_prox: bool
     optim_bits: int
-    percentile_clipping: float
+    percentile_clipping: int
     r: float
     relative_step: bool
     safeguard_warmup: bool
@@ -90,9 +96,24 @@ class TrainOptimizerConfig(BaseConfig):
     r: float
     adanorm: bool
     adam_debias: bool
+    slice_p: int
+    cautious: bool
+    weight_decay_by_lr: True
+    prodigy_steps: 0
+    use_speed: False
+    split_groups: True
+    split_groups_mean: True
+    factored: True
+    factored_fp32: True
+    use_stableadamw: True
+    use_muon_pp: False
+    use_cautious: False
+    use_grams: False
+    use_adopt: False
+    use_focus: False
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainOptimizerConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -125,7 +146,8 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("fused_back_pass", None, bool, False))
         data.append(("growth_rate", None, float, True))
         data.append(("initial_accumulator_value", None, int, True))
-        data.append(("is_paged", None, bool, False))
+        data.append(("initial_accumulator", None, float, True))
+        data.append(("is_paged", False, bool, False))
         data.append(("log_every", None, int, True))
         data.append(("lr_decay", None, float, True))
         data.append(("max_unorm", None, float, True))
@@ -135,12 +157,12 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("nesterov", None, bool, False))
         data.append(("no_prox", None, bool, False))
         data.append(("optim_bits", None, int, True))
-        data.append(("percentile_clipping", None, float, True))
+        data.append(("percentile_clipping", None, int, True))
         data.append(("r", None, float, True))
         data.append(("relative_step", None, bool, False))
         data.append(("safeguard_warmup", None, bool, False))
         data.append(("scale_parameter", None, bool, False))
-        data.append(("stochastic_rounding", True, bool, False))
+        data.append(("stochastic_rounding", None, bool, False))
         data.append(("use_bias_correction", None, bool, False))
         data.append(("use_triton", None, bool, False))
         data.append(("warmup_init", None, bool, False))
@@ -156,8 +178,23 @@ class TrainOptimizerConfig(BaseConfig):
         data.append(("n_sma_threshold", None, int, True))
         data.append(("ams_bound", None, bool, False))
         data.append(("r", None, float, True))
-        data.append(("adanorm", None, bool, False))
+        data.append(("adanorm", False, bool, False))
         data.append(("adam_debias", False, bool, False))
+        data.append(("slice_p", None, int, True))
+        data.append(("cautious", False, bool, False))
+        data.append(("weight_decay_by_lr", True, bool, False))
+        data.append(("prodigy_steps", None, int, True))
+        data.append(("use_speed", False, bool, False))
+        data.append(("split_groups", True, bool, False))
+        data.append(("split_groups_mean", True, bool, False))
+        data.append(("factored", True, bool, False))
+        data.append(("factored_fp32", True, bool, False))
+        data.append(("use_stableadamw", True, bool, False))
+        data.append(("use_muon_pp", False, bool, False))
+        data.append(("use_cautious", False, bool, False))
+        data.append(("use_grams", False, bool, False))
+        data.append(("use_adopt", False, bool, False))
+        data.append(("use_focus", False, bool, False))
 
         return TrainOptimizerConfig(data)
 
@@ -173,9 +210,10 @@ class TrainModelPartConfig(BaseConfig):
     dropout_probability: float
     train_embedding: bool
     attention_mask: bool
+    guidance_scale: float
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainModelPartConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -192,6 +230,7 @@ class TrainModelPartConfig(BaseConfig):
         data.append(("dropout_probability", 0.0, float, False))
         data.append(("train_embedding", True, bool, False))
         data.append(("attention_mask", False, bool, False))
+        data.append(("guidance_scale", 1.0, float, False))
 
         return TrainModelPartConfig(data)
 
@@ -203,11 +242,12 @@ class TrainEmbeddingConfig(BaseConfig):
     train: bool
     stop_training_after: int
     stop_training_after_unit: TimeUnit
-    token_count: int
+    token_count: int | None
     initial_embedding_text: str
+    is_output_embedding: bool
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainEmbeddingConfig, self).__init__(data)
+        super().__init__(data)
 
     @staticmethod
     def default_values():
@@ -220,8 +260,9 @@ class TrainEmbeddingConfig(BaseConfig):
         data.append(("train", True, bool, False))
         data.append(("stop_training_after", None, int, True))
         data.append(("stop_training_after_unit", TimeUnit.NEVER, TimeUnit, False))
-        data.append(("token_count", 1, int, False))
+        data.append(("token_count", 1, int, True))
         data.append(("initial_embedding_text", "*", str, False))
+        data.append(("is_output_embedding", False, bool, False))
 
         return TrainEmbeddingConfig(data)
 
@@ -235,6 +276,10 @@ class TrainConfig(BaseConfig):
     cache_dir: str
     tensorboard: bool
     tensorboard_expose: bool
+    tensorboard_port: str
+    validation: bool
+    validate_after: float
+    validate_after_unit: TimeUnit
     continue_last_backup: bool
     include_train_config: ConfigPart
 
@@ -244,7 +289,10 @@ class TrainConfig(BaseConfig):
     output_dtype: DataType
     output_model_format: ModelFormat
     output_model_destination: str
-    gradient_checkpointing: bool
+    gradient_checkpointing: GradientCheckpointingMethod
+    enable_async_offloading: bool
+    enable_activation_offloading: bool
+    layer_offload_fraction: float
     force_circular_padding: bool
 
     # data settings
@@ -256,13 +304,16 @@ class TrainConfig(BaseConfig):
 
     # training settings
     learning_rate_scheduler: LearningRateScheduler
+    te1_learning_rate_scheduler: LearningRateScheduler
+    te2_learning_rate_scheduler: LearningRateScheduler
     custom_learning_rate_scheduler: str | None
     # Dict keys are literally called "key" and "value"; not a tuple because
     # of restrictions with ConfigList.
     scheduler_params: list[dict[str, str]]
     learning_rate: float
-    learning_rate_warmup_steps: int
+    learning_rate_warmup_steps: float
     learning_rate_cycles: float
+    learning_rate_min_factor: float
     epochs: int
     batch_size: int
     gradient_accumulation_steps: int
@@ -277,24 +328,18 @@ class TrainConfig(BaseConfig):
     enable_autocast_cache: bool
     only_cache: bool
     resolution: str
-    attention_mechanism: AttentionMechanism
-    align_prop: bool
-    align_prop_probability: float
-    align_prop_loss: AlignPropLoss
-    align_prop_weight: float
-    align_prop_steps: int
-    align_prop_truncate_steps: float
-    align_prop_cfg_scale: float
+    frames: str
     mse_strength: float
     mae_strength: float
+    log_cosh_strength: float
     vb_loss_strength: float
     loss_weight_fn: LossWeight
     loss_weight_strength: float
     dropout_probability: float
     loss_scaler: LossScaler
     learning_rate_scaler: LearningRateScaler
-    train_sampler: NoiseScheduler
     seed: int
+    clip_grad_norm: float
 
     # noise
     offset_noise_weight: float
@@ -305,9 +350,12 @@ class TrainConfig(BaseConfig):
     timestep_distribution: TimestepDistribution
     min_noising_strength: float
     max_noising_strength: float
-    max_grad_norm: float
     noising_weight: float
     noising_bias: float
+    do_edm_style_training: bool
+
+    timestep_shift: float
+    dynamic_timestep_shifting: bool
 
     # unet
     unet: TrainModelPartConfig
@@ -371,16 +419,22 @@ class TrainConfig(BaseConfig):
     optimizer: TrainOptimizerConfig
     optimizer_defaults: dict[str, TrainOptimizerConfig]
     use_mechanic:bool
-    use_schedulefree_wraper:bool
+    use_schedulefree_wrapper:bool
 
     # sample settings
     sample_definition_file_name: str
     samples: list[SampleConfig]
     sample_after: float
     sample_after_unit: TimeUnit
+    sample_skip_first: int
     sample_image_format: ImageFormat
+    sample_video_format: VideoFormat
+    sample_audio_format: AudioFormat
     samples_to_tensorboard: bool
     non_ema_sampling: bool
+
+    # cloud settings
+    cloud: CloudConfig
 
     # backup settings
     backup_after: float
@@ -391,17 +445,25 @@ class TrainConfig(BaseConfig):
     save_after: float
     save_after_unit: TimeUnit
     rolling_save_count: int
+    save_every: int
+    save_every_unit: TimeUnit
+    save_skip_first: int
     save_filename_prefix: str
 
+    # secrets - not saved into config file
+    secrets: SecretsConfig
+
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(TrainConfig, self).__init__(
+        super().__init__(
             data,
-            config_version=4,
+            config_version=6,
             config_migrations={
                 0: self.__migration_0,
                 1: self.__migration_1,
                 2: self.__migration_2,
                 3: self.__migration_3,
+                4: self.__migration_4,
+                5: self.__migration_5,
             }
         )
 
@@ -545,8 +607,32 @@ class TrainConfig(BaseConfig):
 
         return migrated_data
 
+    def __migration_4(self, data: dict) -> dict:
+        migrated_data = data.copy()
+
+        gradient_checkpointing = migrated_data.pop("gradient_checkpointing", True)
+
+        if gradient_checkpointing:
+            migrated_data["gradient_checkpointing"] = GradientCheckpointingMethod.ON
+        else:
+            migrated_data["gradient_checkpointing"] = GradientCheckpointingMethod.OFF
+
+        return migrated_data
+
+    def __migration_5(self, data: dict) -> dict:
+        migrated_data = data.copy()
+
+        if "save_after" in migrated_data:
+            migrated_data["save_every"] = migrated_data.pop("save_after")
+        if "save_after_unit" in migrated_data:
+            migrated_data["save_every_unit"] = migrated_data.pop("save_after_unit")
+
+        return migrated_data
+
     def weight_dtypes(self) -> ModelWeightDtypes:
         return ModelWeightDtypes(
+            self.train_dtype,
+            self.fallback_train_dtype,
             self.weight_dtype if self.unet.weight_dtype == DataType.NONE else self.unet.weight_dtype,
             self.weight_dtype if self.prior.weight_dtype == DataType.NONE else self.prior.weight_dtype,
             self.weight_dtype if self.text_encoder.weight_dtype == DataType.NONE else self.text_encoder.weight_dtype,
@@ -569,7 +655,8 @@ class TrainConfig(BaseConfig):
             decoder_model=self.decoder.model_name,
             vae_model=self.vae.model_name,
             lora=self.lora_model_name,
-            embedding=EmbeddingName(self.embedding.uuid, self.embedding.model_name),
+            embedding=EmbeddingName(self.embedding.uuid, self.embedding.model_name) \
+                if self.training_method == TrainingMethod.EMBEDDING else None,
             additional_embeddings=[EmbeddingName(embedding.uuid, embedding.model_name) for embedding in
                                    self.additional_embeddings],
             include_text_encoder=self.text_encoder.include,
@@ -578,45 +665,84 @@ class TrainConfig(BaseConfig):
         )
 
     def train_any_embedding(self) -> bool:
-        return self.training_method == TrainingMethod.EMBEDDING \
-            or any(embedding.train for embedding in self.additional_embeddings)
+        return ((self.training_method == TrainingMethod.EMBEDDING) and not self.embedding.is_output_embedding) \
+            or any((embedding.train and not embedding.is_output_embedding) for embedding in self.additional_embeddings)
+
+    def train_any_output_embedding(self) -> bool:
+        return ((self.training_method == TrainingMethod.EMBEDDING) and self.embedding.is_output_embedding) \
+            or any((embedding.train and embedding.is_output_embedding) for embedding in self.additional_embeddings)
 
     def train_text_encoder_or_embedding(self) -> bool:
-        return (self.text_encoder.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder.train_embedding and self.train_any_embedding())
+        return (self.text_encoder.train and self.training_method != TrainingMethod.EMBEDDING
+                and not self.embedding.is_output_embedding) \
+            or ((self.text_encoder.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
 
     def train_text_encoder_2_or_embedding(self) -> bool:
-        return (self.text_encoder_2.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder_2.train_embedding and self.train_any_embedding())
+        return (self.text_encoder_2.train and self.training_method != TrainingMethod.EMBEDDING
+                and not self.embedding.is_output_embedding) \
+            or ((self.text_encoder_2.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
 
     def train_text_encoder_3_or_embedding(self) -> bool:
-        return (self.text_encoder_3.train and self.training_method != TrainingMethod.EMBEDDING) \
-            or (self.text_encoder_3.train_embedding and self.train_any_embedding())
+        return (self.text_encoder_3.train and self.training_method != TrainingMethod.EMBEDDING
+                and not self.embedding.is_output_embedding) \
+            or ((self.text_encoder_3.train_embedding or not self.model_type.has_multiple_text_encoders())
+                and self.train_any_embedding())
 
-    def to_settings_dict(self) -> dict:
+    def all_embedding_configs(self):
+        if self.training_method == TrainingMethod.EMBEDDING:
+            return self.additional_embeddings + [self.embedding]
+        else:
+            return self.additional_embeddings
+
+    def get_last_backup_path(self) -> str | None:
+        backups_path = os.path.join(self.workspace_dir, "backup")
+        if os.path.exists(backups_path):
+            backup_paths = sorted(
+                [path for path in os.listdir(backups_path) if
+                 os.path.isdir(os.path.join(backups_path, path))],
+                reverse=True,
+            )
+
+            if backup_paths:
+                last_backup_path = backup_paths[0]
+                return os.path.join(backups_path, last_backup_path)
+
+        return None
+
+    def to_settings_dict(self, secrets: bool) -> dict:
         config = TrainConfig.default_values().from_dict(self.to_dict())
 
         config.concepts = None
         config.samples = None
 
-        return config.to_dict()
+        config_dict = config.to_dict()
+        if not secrets:
+            config_dict.pop('secrets',None)
+        return config_dict
 
-    def to_pack_dict(self) -> dict:
+    def to_pack_dict(self, secrets: bool) -> dict:
         config = TrainConfig.default_values().from_dict(self.to_dict())
 
-        with open(config.concept_file_name, 'r') as f:
-            concepts = json.load(f)
-            for i in range(len(concepts)):
-                concepts[i] = ConceptConfig.default_values().from_dict(concepts[i])
-            config.concepts = concepts
+        if config.concepts is None:
+            with open(config.concept_file_name, 'r') as f:
+                concepts = json.load(f)
+                for i in range(len(concepts)):
+                    concepts[i] = ConceptConfig.default_values().from_dict(concepts[i])
+                config.concepts = concepts
 
-        with open(config.sample_definition_file_name, 'r') as f:
-            samples = json.load(f)
-            for i in range(len(samples)):
-                samples[i] = SampleConfig.default_values().from_dict(samples[i])
-            config.samples = samples
+        if config.samples is None:
+            with open(config.sample_definition_file_name, 'r') as f:
+                samples = json.load(f)
+                for i in range(len(samples)):
+                    samples[i] = SampleConfig.default_values().from_dict(samples[i])
+                config.samples = samples
 
-        return config.to_dict()
+        config_dict = config.to_dict()
+        if not secrets:
+            config_dict.pop('secrets',None)
+        return config_dict
 
     def to_unpacked_config(self) -> 'TrainConfig':
         config = TrainConfig.default_values().from_dict(self.to_dict())
@@ -639,16 +765,23 @@ class TrainConfig(BaseConfig):
         data.append(("cache_dir", "workspace-cache/run", str, False))
         data.append(("tensorboard", True, bool, False))
         data.append(("tensorboard_expose", False, bool, False))
+        data.append(("tensorboard_port", 6006, int, False))
+        data.append(("validation", False, bool, False))
+        data.append(("validate_after", 1, int, False))
+        data.append(("validate_after_unit", TimeUnit.EPOCH, TimeUnit, False))
         data.append(("continue_last_backup", False, bool, False))
         data.append(("include_train_config", ConfigPart.NONE, ConfigPart, False))
 
         # model settings
-        data.append(("base_model_name", "runwayml/stable-diffusion-v1-5", str, False))
+        data.append(("base_model_name", "stable-diffusion-v1-5/stable-diffusion-v1-5", str, False))
         data.append(("weight_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("output_dtype", DataType.FLOAT_32, DataType, False))
         data.append(("output_model_format", ModelFormat.SAFETENSORS, ModelFormat, False))
         data.append(("output_model_destination", "models/model.safetensors", str, False))
-        data.append(("gradient_checkpointing", True, bool, False))
+        data.append(("gradient_checkpointing", GradientCheckpointingMethod.ON, GradientCheckpointingMethod, False))
+        data.append(("enable_async_offloading", True, bool, False))
+        data.append(("enable_activation_offloading", True, bool, False))
+        data.append(("layer_offload_fraction", 0.0, float, False))
         data.append(("force_circular_padding", False, bool, False))
 
         # data settings
@@ -660,11 +793,14 @@ class TrainConfig(BaseConfig):
 
         # training settings
         data.append(("learning_rate_scheduler", LearningRateScheduler.CONSTANT, LearningRateScheduler, False))
+        data.append(("te1_learning_rate_scheduler", None, LearningRateScheduler, True))
+        data.append(("te2_learning_rate_scheduler", None, LearningRateScheduler, True))
         data.append(("custom_learning_rate_scheduler", None, str, True))
         data.append(("scheduler_params", [], list[dict[str, str]], True))
         data.append(("learning_rate", 3e-6, float, False))
-        data.append(("learning_rate_warmup_steps", 200, int, False))
-        data.append(("learning_rate_cycles", 1, int, False))
+        data.append(("learning_rate_warmup_steps", 200.0, float, False))
+        data.append(("learning_rate_cycles", 1.0, float, False))
+        data.append(("learning_rate_min_factor", 0.0, float, False))
         data.append(("epochs", 100, int, False))
         data.append(("batch_size", 1, int, False))
         data.append(("gradient_accumulation_steps", 1, int, False))
@@ -679,24 +815,18 @@ class TrainConfig(BaseConfig):
         data.append(("enable_autocast_cache", True, bool, False))
         data.append(("only_cache", False, bool, False))
         data.append(("resolution", "512", str, False))
-        data.append(("attention_mechanism", AttentionMechanism.XFORMERS, AttentionMechanism, False))
-        data.append(("align_prop", False, bool, False))
-        data.append(("align_prop_probability", 0.1, float, False))
-        data.append(("align_prop_loss", AlignPropLoss.AESTHETIC, AlignPropLoss, False))
-        data.append(("align_prop_weight", 0.01, float, False))
-        data.append(("align_prop_steps", 20, int, False))
-        data.append(("align_prop_truncate_steps", 0.5, float, False))
-        data.append(("align_prop_cfg_scale", 7.0, float, False))
+        data.append(("frames", "25", str, False))
         data.append(("mse_strength", 1.0, float, False))
         data.append(("mae_strength", 0.0, float, False))
+        data.append(("log_cosh_strength", 0.0, float, False))
         data.append(("vb_loss_strength", 1.0, float, False))
         data.append(("loss_weight_fn", LossWeight.CONSTANT, LossWeight, False))
         data.append(("loss_weight_strength", 5.0, float, False))
         data.append(("dropout_probability", 0.0, float, False))
         data.append(("loss_scaler", LossScaler.NONE, LossScaler, False))
         data.append(("learning_rate_scaler", LearningRateScaler.NONE, LearningRateScaler, False))
-        data.append(("train_sampler", NoiseScheduler.DDIM, NoiseScheduler, False))
         data.append(("seed", -1, int, False))
+        data.append(("clip_grad_norm", 1.0, float, True))
 
         # noise
         data.append(("offset_noise_weight", 0.0, float, False))
@@ -706,10 +836,13 @@ class TrainConfig(BaseConfig):
         data.append(("force_epsilon_prediction", False, bool, False))
         data.append(("min_noising_strength", 0.0, float, False))
         data.append(("max_noising_strength", 1.0, float, False))
-        data.append(("max_grad_norm", 1.0, float, False))
         data.append(("timestep_distribution", TimestepDistribution.UNIFORM, TimestepDistribution, False))
         data.append(("noising_weight", 0.0, float, False))
         data.append(("noising_bias", 0.0, float, False))
+        data.append(("do_edm_style_training", False, bool, False))
+        data.append(("timestep_shift", 1.0, float, False))
+        data.append(("dynamic_timestep_shifting", False, bool, False))
+
 
         # unet
         unet = TrainModelPartConfig.default_values()
@@ -799,6 +932,9 @@ class TrainConfig(BaseConfig):
         data.append(("additional_embeddings", [], list[TrainEmbeddingConfig], False))
         data.append(("embedding_weight_dtype", DataType.FLOAT_32, DataType, False))
 
+        # cloud
+        data.append(("cloud", CloudConfig.default_values(), CloudConfig, False))
+
         # lora
         data.append(("peft_type", PeftType.LORA, PeftType, False))
         data.append(("lora_model_name", "", str, False))
@@ -815,14 +951,17 @@ class TrainConfig(BaseConfig):
         data.append(("optimizer", TrainOptimizerConfig.default_values(), TrainOptimizerConfig, False))
         data.append(("optimizer_defaults", {}, dict[str, TrainOptimizerConfig], False))
         data.append(("use_mechanic", False, bool, False))
-        data.append(("use_schedulefree_wraper", False, bool, False))
+        data.append(("use_schedulefree_wrapper", False, bool, False))
 
         # sample settings
         data.append(("sample_definition_file_name", "training_samples/samples.json", str, False))
         data.append(("samples", None, list[SampleConfig], True))
         data.append(("sample_after", 10, int, False))
         data.append(("sample_after_unit", TimeUnit.MINUTE, TimeUnit, False))
+        data.append(("sample_skip_first", 0, int, False))
         data.append(("sample_image_format", ImageFormat.JPG, ImageFormat, False))
+        data.append(("sample_video_format", VideoFormat.MP4, VideoFormat, False))
+        data.append(("sample_audio_format", AudioFormat.MP3, AudioFormat, False))
         data.append(("samples_to_tensorboard", True, bool, False))
         data.append(("non_ema_sampling", True, bool, False))
 
@@ -835,6 +974,13 @@ class TrainConfig(BaseConfig):
         data.append(("save_after", 0, int, False))
         data.append(("save_after_unit", TimeUnit.NEVER, TimeUnit, False))
         data.append(("rolling_save_count", 1, int, False))
+        data.append(("save_every", 0, int, False))
+        data.append(("save_every_unit", TimeUnit.NEVER, TimeUnit, False))
+        data.append(("save_skip_first", 0, int, False))
         data.append(("save_filename_prefix", "", str, False))
+
+        # secrets
+        secrets = SecretsConfig.default_values()
+        data.append(("secrets", secrets, SecretsConfig, False))
 
         return TrainConfig(data)

@@ -22,7 +22,7 @@ class BaseModelSetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(BaseModelSetup, self).__init__()
+        super().__init__()
 
         self.train_device = train_device
         self.temp_device = temp_device
@@ -34,6 +34,14 @@ class BaseModelSetup(
             model: BaseModel,
             config: TrainConfig,
     ) -> NamedParameterGroupCollection:
+        pass
+
+    @abstractmethod
+    def setup_optimizations(
+            self,
+            model: BaseModel,
+            config: TrainConfig,
+    ):
         pass
 
     @abstractmethod
@@ -89,12 +97,12 @@ class BaseModelSetup(
             config: TrainConfig,
             scheduler: LRScheduler,
             tensorboard: SummaryWriter,
-    ):
+    ) -> dict[str,float]:
         lrs = scheduler.get_last_lr()
         parameters = model.parameters.display_name_mapping
 
         reported_learning_rates = {}
-        for lr, parameter in zip(lrs, parameters):
+        for lr, parameter in zip(lrs, parameters, strict=True):
             # only use the prefix. this prevents multiple embedding reports. TODO: find a better solution
             name = parameter.split('/')[0]
 
@@ -107,6 +115,7 @@ class BaseModelSetup(
             tensorboard.add_scalar(
                 f"lr/{name}", lr, model.train_progress.global_step
             )
+        return reported_learning_rates
 
     def stop_unet_training_elapsed(
             self,
@@ -168,26 +177,13 @@ class BaseModelSetup(
             train_progress,
         )
 
-    def stop_additional_embedding_training_elapsed(
-            self,
-            config: TrainEmbeddingConfig,
-            train_progress: TrainProgress,
-            embedding_index: int,
-    ):
-        return self.single_action_elapsed(
-            "stop_embedding_training_" + str(embedding_index),
-            config.stop_training_after,
-            config.stop_training_after_unit,
-            train_progress,
-        )
-
     def stop_embedding_training_elapsed(
             self,
             config: TrainEmbeddingConfig,
             train_progress: TrainProgress,
     ):
         return self.single_action_elapsed(
-            "stop_embedding_training",
+            "stop_embedding_training_" + str(config.uuid),
             config.stop_training_after,
             config.stop_training_after_unit,
             train_progress,

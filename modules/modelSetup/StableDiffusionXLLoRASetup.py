@@ -1,11 +1,14 @@
 from modules.model.StableDiffusionXLModel import StableDiffusionXLModel
 from modules.modelSetup.BaseStableDiffusionXLSetup import BaseStableDiffusionXLSetup
 from modules.module.LoRAModule import LoRAModuleWrapper
+from modules.util.TrainProgress import TrainProgress
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.NamedParameterGroup import NamedParameterGroup, NamedParameterGroupCollection
 from modules.util.optimizer_util import init_model_parameters
 from modules.util.torch_util import state_dict_has_prefix
-from lycoris import create_lycoris, LycorisNetwork
+from lycoris import create_lycoris, LycorisNetwork,create_lycoris_from_weights
+import torch
+from itertools import chain
 
 class StableDiffusionXLLoRASetup(
     BaseStableDiffusionXLSetup,
@@ -16,7 +19,7 @@ class StableDiffusionXLLoRASetup(
             temp_device: torch.device,
             debug_mode: bool,
     ):
-        super(StableDiffusionXLLoRASetup, self).__init__(
+        super().__init__(
             train_device=train_device,
             temp_device=temp_device,
             debug_mode=debug_mode,
@@ -32,7 +35,6 @@ class StableDiffusionXLLoRASetup(
         if config.text_encoder.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_1_lora",
-                display_name="text_encoder_1_lora",
                 parameters=model.text_encoder_1_lora.parameters(),
                 learning_rate=config.text_encoder.learning_rate,
             ))
@@ -40,38 +42,26 @@ class StableDiffusionXLLoRASetup(
         if config.text_encoder_2.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="text_encoder_2_lora",
-                display_name="text_encoder_2_lora",
                 parameters=model.text_encoder_2_lora.parameters(),
                 learning_rate=config.text_encoder_2.learning_rate,
             ))
 
-        if config.train_any_embedding():
+        if config.train_any_embedding() or config.train_any_output_embedding():
             if config.text_encoder.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_1.additional_embeddings,
-                                                        model.embedding_wrapper_1.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_1.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_1/{name}",
-                        display_name=f"embeddings_1/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.all_text_encoder_1_embeddings(), parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_1"
+                )
 
             if config.text_encoder_2.train_embedding:
-                for parameter, placeholder, name in zip(model.embedding_wrapper_2.additional_embeddings,
-                                                        model.embedding_wrapper_2.additional_embedding_placeholders,
-                                                        model.embedding_wrapper_2.additional_embedding_names):
-                    parameter_group_collection.add_group(NamedParameterGroup(
-                        unique_name=f"embeddings_2/{name}",
-                        display_name=f"embeddings_2/{placeholder}",
-                        parameters=[parameter],
-                        learning_rate=config.embedding_learning_rate,
-                    ))
+                self._add_embedding_param_groups(
+                    model.all_text_encoder_2_embeddings(), parameter_group_collection, config.embedding_learning_rate,
+                    "embeddings_2"
+                )
 
         if config.unet.train:
             parameter_group_collection.add_group(NamedParameterGroup(
                 unique_name="unet_lora",
-                display_name="unet_lora",
                 parameters=model.unet_lora.parameters(),
                 learning_rate=config.unet.learning_rate,
             ))
@@ -83,6 +73,7 @@ class StableDiffusionXLLoRASetup(
             model: StableDiffusionXLModel,
             config: TrainConfig,
     ):
+        self._setup_embeddings_requires_grad(model, config)
         model.text_encoder_1.requires_grad_(False)
         model.text_encoder_2.requires_grad_(False)
         model.unet.requires_grad_(False)
@@ -92,21 +83,6 @@ class StableDiffusionXLLoRASetup(
             train_text_encoder_1 = config.text_encoder.train and \
                                    not self.stop_text_encoder_training_elapsed(config, model.train_progress)
             model.text_encoder_1_lora.requires_grad_(train_text_encoder_1)
-
-        for i, embedding in enumerate(model.additional_embeddings):
-            embedding_config = config.additional_embeddings[i]
-
-            train_embedding_1 = \
-                embedding_config.train \
-                and config.text_encoder.train_embedding \
-                and not self.stop_additional_embedding_training_elapsed(embedding_config, model.train_progress, i)
-            embedding.text_encoder_1_vector.requires_grad_(train_embedding_1)
-
-            train_embedding_2 = \
-                embedding_config.train \
-                and config.text_encoder_2.train_embedding \
-                and not self.stop_additional_embedding_training_elapsed(embedding_config, model.train_progress, i)
-            embedding.text_encoder_2_vector.requires_grad_(train_embedding_2)
 
         if model.text_encoder_2_lora is not None:
             train_text_encoder_2 = config.text_encoder_2.train and \
@@ -125,24 +101,28 @@ class StableDiffusionXLLoRASetup(
     ):
         create_te1 = config.text_encoder.train or state_dict_has_prefix(model.lora_state_dict, "lora_te1")
         create_te2 = config.text_encoder_2.train or state_dict_has_prefix(model.lora_state_dict, "lora_te2")
-
-        LycorisNetwork.LORA_PREFIX = "lora_te1"
-        model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
-
-        LycorisNetwork.LORA_PREFIX = "lora_te2"
-        model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
-
-        LycorisNetwork.LORA_PREFIX = "lora_unet"
-        model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options)
+        create_unet = config.unet.train or state_dict_has_prefix(model.lora_state_dict, "lora_unet")
 
         if model.lora_state_dict:
-            if create_te1:
-                model.text_encoder_1_lora.load_state_dict(model.lora_state_dict)
-            if create_te2:
-                model.text_encoder_2_lora.load_state_dict(model.lora_state_dict)
+            LycorisNetwork.LORA_PREFIX = "lora_te1"
+            model.text_encoder_1_lora,_ = create_lycoris_from_weights(1.0, None, model.text_encoder_1, weights_sd=model.lora_state_dict) if create_te1 else None
 
-            model.unet_lora.load_state_dict(model.lora_state_dict)
+            LycorisNetwork.LORA_PREFIX = "lora_te2"
+            model.text_encoder_2_lora,_ = create_lycoris_from_weights(1.0, None, model.text_encoder_2, weights_sd=model.lora_state_dict) if create_te2 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_unet"
+            model.unet_lora,_ = create_lycoris_from_weights(1.0, None, model.unet, weights_sd=model.lora_state_dict)
+            
             model.lora_state_dict = None
+        else:
+            LycorisNetwork.LORA_PREFIX = "lora_te1"
+            model.text_encoder_1_lora = create_lycoris(model.text_encoder_1, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te1 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_te2"
+            model.text_encoder_2_lora = create_lycoris(model.text_encoder_2, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options) if create_te2 else None
+
+            LycorisNetwork.LORA_PREFIX = "lora_unet"
+            model.unet_lora = create_lycoris(model.unet, 1.0, linear_dim=config.lora_rank, linear_alpha=config.lora_alpha, algo=str(config.lora_type), dropout=config.dropout_probability, **config.lycoris_options)
 
         if create_te1:
             model.text_encoder_1_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
@@ -154,28 +134,32 @@ class StableDiffusionXLLoRASetup(
         model.unet_lora.to(dtype=config.lora_weight_dtype.torch_dtype())
         model.unet_lora.apply_to()
 
+        if config.rescale_noise_scheduler_to_zero_terminal_snr:
+            model.rescale_noise_scheduler_to_zero_terminal_snr()
+            model.force_v_prediction()
+
+        if config.do_edm_style_training:
+            from diffusers import EulerDiscreteScheduler
+            model.noise_scheduler = EulerDiscreteScheduler(1000, beta_end=0.012, beta_schedule="scaled_linear", beta_start=0.00085, timestep_spacing="trailing")
+
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_1)
         self._remove_added_embeddings_from_tokenizer(model.tokenizer_2)
-        self._setup_additional_embeddings(model, config)
+        self._setup_embeddings(model, config)
         self._setup_embedding_wrapper(model, config)
         self.__setup_requires_grad(model, config)
-        init_model_parameters(model, self.create_parameters(model, config))
-
-        self._setup_optimizations(model, config)
+        init_model_parameters(model, self.create_parameters(model, config),train_device=self.train_device)
 
     def setup_train_device(
             self,
             model: StableDiffusionXLModel,
             config: TrainConfig,
     ):
-        vae_on_train_device = config.align_prop or not config.latent_caching
+        vae_on_train_device = not config.latent_caching
         text_encoder_1_on_train_device = \
             config.train_text_encoder_or_embedding()\
-            or config.align_prop \
             or not config.latent_caching
         text_encoder_2_on_train_device = \
             config.train_text_encoder_2_or_embedding() \
-            or config.align_prop \
             or not config.latent_caching
 
         model.text_encoder_1_to(self.train_device if text_encoder_1_on_train_device else self.temp_device)
@@ -208,6 +192,8 @@ class StableDiffusionXLLoRASetup(
             train_progress: TrainProgress
     ):
         if config.preserve_embedding_norm:
+            self._normalize_output_embeddings(model.all_text_encoder_1_embeddings())
+            self._normalize_output_embeddings(model.all_text_encoder_2_embeddings())
             model.embedding_wrapper_1.normalize_embeddings()
             model.embedding_wrapper_2.normalize_embeddings()
         self.__setup_requires_grad(model, config)

@@ -3,6 +3,9 @@ from modules.util import create
 from modules.util.config.TrainConfig import TrainConfig, TrainOptimizerConfig
 from modules.util.enum.Optimizer import Optimizer
 from modules.util.NamedParameterGroup import NamedParameterGroupCollection
+from modules.util.torch_util import optimizer_to_device_
+
+import torch
 
 
 def change_optimizer(train_config: TrainConfig) -> TrainOptimizerConfig:
@@ -47,13 +50,16 @@ def update_optimizer_config(train_config: TrainConfig):
 def init_model_parameters(
         model: BaseModel,
         parameters: NamedParameterGroupCollection,
+        train_device: torch.device,
 ):
     model.parameters = parameters
 
     opt_parameters = parameters.parameters_for_optimizer(model.train_config)
     for opt_param_dict in opt_parameters:
         opt_param = [opt_param_dict]
-        model.optimizers.append(create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config, opt_param))
+        opt = create.create_optimizer(parameters, model.optimizer_state_dict, model.train_config, opt_param)
+        optimizer_to_device_(opt, train_device)
+        model.optimizers.append(opt)
     model.optimizer_state_dict = None
 
     model.ema = create.create_ema(parameters.parameters(), model.ema_state_dict, model.train_config)
@@ -121,6 +127,36 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "percentile_clipping": 100,
         "block_wise": True,
         "is_paged": False,
+    },
+    Optimizer.AdEMAMix_8BIT: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "min_8bit_size": 4096,
+        "is_paged": False,
+    },
+    Optimizer.AdEMAMix: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "beta3": 0.9999,
+        "eps": 1e-8,
+        "alpha": 5,
+        "weight_decay": 1e-2,
+        "optim_bits": 32,
+        "min_8bit_size": 4096,
+        "is_paged": False,
+    },
+    Optimizer.ADOPT: {
+        "beta1": 0.9,
+        "beta2": 0.9999,
+        "weight_decay": 0.0,
+        "decoupled_decay": False,
+        "fixed_decay": False,
+        "cautious": False,
+        "eps": 1e-6,
     },
     Optimizer.LAMB: {
         "bias_correction": True,
@@ -236,6 +272,32 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "d_coef": 1.0,
         "growth_rate": float('inf'),
         "fsdp_in_use": False,
+        "slice_p": 11,
+    },
+    Optimizer.PRODIGY_PLUS_SCHEDULE_FREE: {
+        "beta1": 0.9,
+        "beta2": 0.99,
+        "beta3": None,
+        "weight_decay": 0.0,
+        "weight_decay_by_lr": True,
+        "use_bias_correction": False,
+        "d0": 1e-6,
+        "d_coef": 1.0,
+        "prodigy_steps": 0,
+        "use_speed": False,
+        "eps": 1e-8,
+        "split_groups": True,
+        "split_groups_mean": True,
+        "factored": True,
+        "factored_fp32": True,
+        "fused_back_pass": False,
+        "use_stableadamw": True,
+        "use_muon_pp": False,
+        "use_cautious": False,
+        "use_grams": False,
+        "use_adopt": False,
+        "use_focus": False,
+        "stochastic_rounding": True,
     },
     Optimizer.DADAPT_ADA_GRAD: {
         "momentum": 0,
@@ -370,5 +432,17 @@ OPTIMIZER_DEFAULT_PARAMETERS = {
         "adanorm": False,
         "adam_debias": False,
         "eps": 1e-8,
+    },
+    Optimizer.YOGI: {
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "weight_decay": 0.0,
+        "decoupled_decay": True,
+        "fixed_decay": False,
+        "r": 0.95,
+        "adanorm": False,
+        "adam_debias": False,
+        "initial_accumulator": 1e-6,
+        "eps": 1e-3,
     },
 }

@@ -18,7 +18,7 @@ class StableDiffusionXLLoRAModelLoader(
     InternalModelLoaderMixin,
 ):
     def __init__(self):
-        super(StableDiffusionXLLoRAModelLoader, self).__init__()
+        super().__init__()
 
     def _default_model_spec_name(
             self,
@@ -36,20 +36,19 @@ class StableDiffusionXLLoRAModelLoader(
             self,
             model_type: ModelType,
             model_names: ModelNames,
-            weight_dtypes: ModelWeightDtypes,
-            train_config: TrainConfig
+            weight_dtypes: ModelWeightDtypes
     ) -> StableDiffusionXLModel | None:
         base_model_loader = StableDiffusionXLModelLoader()
         lora_model_loader = StableDiffusionXLLoRALoader()
         embedding_loader = StableDiffusionXLEmbeddingLoader()
 
-        model = StableDiffusionXLModel(model_type=model_type,train_config=train_config)
+        model = StableDiffusionXLModel(model_type=model_type)
         self._load_internal_data(model, model_names.lora)
         model.model_spec = self._load_default_model_spec(model_type)
 
         if model_names.base_model is not None:
             base_model_loader.load(model, model_type, model_names, weight_dtypes)
         lora_model_loader.load(model, model_names)
-        embedding_loader.load_multiple(model, model_names)
+        embedding_loader.load(model, model_names.lora, model_names)
 
         return model

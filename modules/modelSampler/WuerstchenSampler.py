@@ -1,14 +1,15 @@
 import inspect
-import os
-from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from modules.model.WuerstchenModel import WuerstchenModel
-from modules.modelSampler.BaseModelSampler import BaseModelSampler
+from modules.modelSampler.BaseModelSampler import BaseModelSampler, ModelSamplerOutput
 from modules.util.config.SampleConfig import SampleConfig
+from modules.util.enum.AudioFormat import AudioFormat
+from modules.util.enum.FileType import FileType
 from modules.util.enum.ImageFormat import ImageFormat
 from modules.util.enum.ModelType import ModelType
 from modules.util.enum.NoiseScheduler import NoiseScheduler
+from modules.util.enum.VideoFormat import VideoFormat
 from modules.util.torch_util import torch_gc
 
 import torch
@@ -25,7 +26,7 @@ class WuerstchenSampler(BaseModelSampler):
             model: WuerstchenModel,
             model_type: ModelType,
     ):
-        super(WuerstchenSampler, self).__init__(train_device, temp_device)
+        super().__init__(train_device, temp_device)
 
         self.model = model
         self.model_type = model_type
@@ -44,66 +45,27 @@ class WuerstchenSampler(BaseModelSampler):
             text_encoder_layer_skip,
             prior_noise_scheduler,
             prior_prior,
-            prior_text_encoder,
-            prior_tokenizer,
             on_update_progress,
     ):
         # prepare prompt
         self.model.prior_text_encoder_to(self.train_device)
-        tokenizer_output = prior_tokenizer(
-            prompt,
-            padding='max_length',
-            truncation=True,
-            max_length=prior_tokenizer.model_max_length,
-            return_tensors="pt",
-        )
-        tokens = tokenizer_output.input_ids.to(self.train_device)
-        tokens_attention_mask = tokenizer_output.attention_mask.to(self.train_device)
 
-        negative_tokenizer_output = prior_tokenizer(
-            negative_prompt,
-            padding='max_length',
-            truncation=True,
-            max_length=prior_tokenizer.model_max_length,
-            return_tensors="pt",
+        prompt_embedding, pooled_prompt_embedding = self.model.encode_text(
+            text=prompt,
+            train_device=self.train_device,
+            text_encoder_layer_skip=text_encoder_layer_skip,
         )
-        negative_tokens = negative_tokenizer_output.input_ids.to(self.train_device)
-        negative_tokens_attention_mask = negative_tokenizer_output.attention_mask.to(self.train_device)
 
-        text_encoder_output = prior_text_encoder(
-            tokens,
-            attention_mask=tokens_attention_mask,
-            return_dict=True,
-            output_hidden_states=True,
+        negative_prompt_embedding, pooled_negative_prompt_embedding = self.model.encode_text(
+            text=negative_prompt,
+            train_device=self.train_device,
+            text_encoder_layer_skip=text_encoder_layer_skip,
         )
-        if self.model_type.is_wuerstchen_v2():
-            final_layer_norm = prior_text_encoder.text_model.final_layer_norm
-            prompt_embedding = final_layer_norm(
-                text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-            )
-        elif self.model_type.is_stable_cascade():
-            prompt_embedding = text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-            pooled_prompt_embedding = text_encoder_output.text_embeds.unsqueeze(1)
-
-        negative_text_encoder_output = prior_text_encoder(
-            negative_tokens,
-            attention_mask=negative_tokens_attention_mask,
-            return_dict=True,
-            output_hidden_states=True,
-        )
-        if self.model_type.is_wuerstchen_v2():
-            final_layer_norm = prior_text_encoder.text_model.final_layer_norm
-            negative_prompt_embedding = final_layer_norm(
-                negative_text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-            )
-        if self.model_type.is_stable_cascade():
-            negative_prompt_embedding = negative_text_encoder_output.hidden_states[-(1 + text_encoder_layer_skip)]
-            pooled_negative_prompt_embedding = negative_text_encoder_output.text_embeds.unsqueeze(1)
 
         combined_prompt_embedding = torch.cat([negative_prompt_embedding, prompt_embedding]) \
             .to(dtype=self.model.prior_train_dtype.torch_dtype())
         if self.model_type.is_stable_cascade():
-            pooled_combined_prompt_embedding = torch.cat([pooled_negative_prompt_embedding, pooled_prompt_embedding]) \
+            combined_pooled_prompt_embedding = torch.cat([pooled_negative_prompt_embedding, pooled_prompt_embedding]) \
                 .to(dtype=self.model.prior_train_dtype.torch_dtype())
 
         self.model.prior_text_encoder_to(self.temp_device)
@@ -146,7 +108,7 @@ class WuerstchenSampler(BaseModelSampler):
                 elif self.model_type.is_stable_cascade():
                     prior_kwargs = {
                         'clip_text': combined_prompt_embedding,
-                        'clip_text_pooled': pooled_combined_prompt_embedding,
+                        'clip_text_pooled': combined_pooled_prompt_embedding,
                         'clip_img': clip_img,
                     }
 
@@ -314,7 +276,7 @@ class WuerstchenSampler(BaseModelSampler):
             text_encoder_layer_skip: int = 0,
             force_last_timestep: bool = False,
             on_update_progress: Callable[[int, int], None] = lambda _, __: None,
-    ) -> Image.Image:
+    ) -> ModelSamplerOutput:
         generator = torch.Generator(device=self.train_device)
         if random_seed:
             generator.seed()
@@ -324,8 +286,6 @@ class WuerstchenSampler(BaseModelSampler):
         height = (height // 128) * 128
         width = (width // 128) * 128
 
-        prior_tokenizer = self.model.prior_tokenizer
-        prior_text_encoder = self.model.prior_text_encoder
         prior_noise_scheduler = self.model.prior_noise_scheduler
         prior_prior = self.model.prior_prior
 
@@ -353,9 +313,7 @@ class WuerstchenSampler(BaseModelSampler):
                 text_encoder_layer_skip,
                 prior_noise_scheduler,
                 prior_prior,
-                prior_text_encoder,
-                prior_tokenizer,
-                on_update_progress
+                on_update_progress,
             )
 
             latent_image = self.__sample_decoder(
@@ -384,24 +342,26 @@ class WuerstchenSampler(BaseModelSampler):
             self.model.decoder_vqgan_to(self.temp_device)
             torch_gc()
 
-        return Image.fromarray(image_array)
+        return ModelSamplerOutput(
+            file_type=FileType.IMAGE,
+            data=Image.fromarray(image_array),
+        )
 
     def sample(
             self,
             sample_config: SampleConfig,
             destination: str,
             image_format: ImageFormat,
-            on_sample: Callable[[Image], None] = lambda _: None,
+            video_format: VideoFormat,
+            audio_format: AudioFormat,
+            on_sample: Callable[[ModelSamplerOutput], None] = lambda _: None,
             on_update_progress: Callable[[int, int], None] = lambda _, __: None,
     ):
-        prompt = self.model.add_embeddings_to_prompt(sample_config.prompt)
-        negative_prompt = self.model.add_embeddings_to_prompt(sample_config.negative_prompt)
-
-        image = self.__sample_base(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            height=sample_config.height,
-            width=sample_config.width,
+        sampler_output = self.__sample_base(
+            prompt=sample_config.prompt,
+            negative_prompt=sample_config.negative_prompt,
+            height=self.quantize_resolution(sample_config.height, 128),
+            width=self.quantize_resolution(sample_config.width, 128),
             seed=sample_config.seed,
             random_seed=sample_config.random_seed,
             diffusion_steps=sample_config.diffusion_steps,
@@ -413,7 +373,9 @@ class WuerstchenSampler(BaseModelSampler):
             on_update_progress=on_update_progress,
         )
 
-        os.makedirs(Path(destination).parent.absolute(), exist_ok=True)
-        image.save(destination, format=image_format.pil_format())
+        self.save_sampler_output(
+            sampler_output, destination,
+            image_format, video_format, audio_format,
+        )
 
-        on_sample(image)
+        on_sample(sampler_output)

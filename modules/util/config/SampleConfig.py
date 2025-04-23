@@ -10,6 +10,8 @@ class SampleConfig(BaseConfig):
     negative_prompt: str
     height: int
     width: int
+    frames: int
+    length: float
     seed: int
     random_seed: bool
     diffusion_steps: int
@@ -27,7 +29,7 @@ class SampleConfig(BaseConfig):
     mask_image_path: str
 
     def __init__(self, data: list[(str, Any, type, bool)]):
-        super(SampleConfig, self).__init__(data)
+        super().__init__(data)
 
     def from_train_config(self, train_config):
         self.text_encoder_1_layer_skip = train_config.text_encoder_layer_skip
@@ -45,6 +47,8 @@ class SampleConfig(BaseConfig):
         data.append(("negative_prompt", "", str, False))
         data.append(("height", 512, int, False))
         data.append(("width", 512, int, False))
+        data.append(("frames", 1, int, False))
+        data.append(("length", 10.0, float, False))
         data.append(("seed", 42, int, False))
         data.append(("random_seed", False, bool, False))
         data.append(("diffusion_steps", 20, int, False))
@@ -54,6 +58,7 @@ class SampleConfig(BaseConfig):
         data.append(("text_encoder_1_layer_skip", 0, int, False))
         data.append(("text_encoder_2_layer_skip", 0, int, False))
         data.append(("text_encoder_3_layer_skip", 0, int, False))
+        data.append(("prior_attention_mask", False, bool, False))
         data.append(("force_last_timestep", False, bool, False))
 
         data.append(("sample_inpainting", False, bool, False))

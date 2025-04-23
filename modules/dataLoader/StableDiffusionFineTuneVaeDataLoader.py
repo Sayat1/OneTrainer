@@ -1,3 +1,4 @@
+import copy
 import os
 import re
 
@@ -7,8 +8,6 @@ from modules.util import path_util
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.torch_util import torch_gc
 from modules.util.TrainProgress import TrainProgress
-
-import torch
 
 from mgds.MGDS import MGDS, TrainDataLoader
 from mgds.OutputPipelineModule import OutputPipelineModule
@@ -36,6 +35,8 @@ from mgds.pipelineModules.ScaleImage import ScaleImage
 from mgds.pipelineModules.SingleAspectCalculation import SingleAspectCalculation
 from mgds.pipelineModules.VariationSorting import VariationSorting
 
+import torch
+
 
 class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
     def __init__(
@@ -45,16 +46,22 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
             config: TrainConfig,
             model: StableDiffusionModel,
             train_progress: TrainProgress,
+            is_validation: bool = False,
     ):
-        super(StableDiffusionFineTuneVaeDataLoader, self).__init__(
+        super().__init__(
             train_device,
             temp_device,
         )
+
+        if is_validation:
+            config = copy.copy(config)
+            config.batch_size = 1
 
         self.__ds = self.create_dataset(
             config=config,
             model=model,
             train_progress=train_progress,
+            is_validation=is_validation,
         )
         self.__dl = TrainDataLoader(self.__ds, config.batch_size)
 
@@ -82,9 +89,9 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
         supported_extensions = path_util.supported_image_extensions()
 
         collect_paths = CollectPaths(
-            concept_in_name='concept', path_in_name='path', path_out_name='image_path',
-            concept_out_name='concept', extensions=supported_extensions, include_postfix=None,
-            exclude_postfix=['-masklabel'], include_subdirectories_in_name='concept.include_subdirectories'
+            concept_in_name='concept', path_in_name='path', include_subdirectories_in_name='concept.include_subdirectories', enabled_in_name='enabled',
+            path_out_name='image_path', concept_out_name='concept',
+            extensions=supported_extensions, include_postfix=None, exclude_postfix=['-masklabel']
         )
 
         mask_path = ModifyPath(in_name='image_path', out_name='mask_path', postfix='-masklabel', extension='.png')
@@ -96,10 +103,9 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
         return modules
 
-
     def __load_input_modules(self, config: TrainConfig) -> list:
-        load_image = LoadImage(path_in_name='image_path', image_out_name='image', range_min=-1.0, range_max=1.0)
-        load_mask = LoadImage(path_in_name='mask_path', image_out_name='latent_mask', range_min=0, range_max=1, channels=1)
+        load_image = LoadImage(path_in_name='image_path', image_out_name='image', range_min=-1.0, range_max=1.0, supported_extensions=path_util.supported_image_extensions())
+        load_mask = LoadImage(path_in_name='mask_path', image_out_name='latent_mask', range_min=0, range_max=1, channels=1, supported_extensions=path_util.supported_image_extensions())
 
         modules = [load_image]
 
@@ -107,7 +113,6 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
             modules.append(load_mask)
 
         return modules
-
 
     def __mask_augmentation_modules(self, config: TrainConfig) -> list:
         inputs = ['image']
@@ -120,14 +125,14 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
         modules = []
 
-        if config.masked_training and config.random_rotate_and_crop:
+        if config.masked_training:
             modules.append(random_mask_rotate_crop)
 
         return modules
 
-
     def __aspect_bucketing_in(self, config: TrainConfig):
         calc_aspect = CalcAspect(image_in_name='image', resolution_out_name='original_resolution')
+
         aspect_bucketing = AspectBucketing(
             quantization=8,
             resolution_in_name='original_resolution',
@@ -149,16 +154,14 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
             possible_resolutions_out_name='possible_resolutions'
         )
 
-        modules = []
+        modules = [calc_aspect]
 
-        modules.append(calc_aspect)
         if config.aspect_ratio_bucketing:
             modules.append(aspect_bucketing)
         else:
             modules.append(single_aspect_calculation)
 
         return modules
-
 
     def __crop_modules(self, config: TrainConfig):
         inputs = ['image']
@@ -171,7 +174,6 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
         modules = [scale_crop]
 
         return modules
-
 
     def __augmentation_modules(self, config: TrainConfig):
         inputs = ['image']
@@ -186,7 +188,6 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
         random_saturation = RandomSaturation(names=['image'], enabled_in_name='concept.image.enable_random_saturation', fixed_enabled_in_name='concept.image.enable_fixed_saturation', max_strength_in_name='concept.image.random_saturation_max_strength')
         random_hue = RandomHue(names=['image'], enabled_in_name='concept.image.enable_random_hue', fixed_enabled_in_name='concept.image.enable_fixed_hue', max_strength_in_name='concept.image.random_hue_max_strength')
 
-
         modules = [
             random_flip,
             random_rotate,
@@ -198,14 +199,12 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
         return modules
 
-
     def __preparation_modules(self, config: TrainConfig, model: StableDiffusionModel):
         image = EncodeVAE(in_name='image', out_name='latent_image_distribution', vae=model.vae)
 
         modules = [image]
 
         return modules
-
 
     def __cache_modules(self, config: TrainConfig, model: StableDiffusionModel):
         split_names = ['image', 'latent_image_distribution']
@@ -231,7 +230,6 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
         return modules
 
-
     def __output_modules(self, config: TrainConfig):
         output_names = ['image', 'latent_image', 'image_path']
 
@@ -240,6 +238,12 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
         sort_names = output_names + ['concept']
         output_names = output_names + [('concept.loss_weight', 'loss_weight')]
+
+        # add for calculating loss per concept
+        if config.validation:
+            output_names.append(('concept.name', 'concept_name'))
+            output_names.append(('concept.path', 'concept_path'))
+            output_names.append(('concept.seed', 'concept_seed'))
 
         image_sample = SampleVAEDistribution(in_name='latent_image_distribution', out_name='latent_image', mode='mean')
 
@@ -286,6 +290,7 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
             config: TrainConfig,
             model: StableDiffusionModel,
             train_progress: TrainProgress,
+            is_validation: bool = False,
     ):
         enumerate_input = self.__enumerate_input_modules(config)
         load_input = self.__load_input_modules(config)
@@ -314,5 +319,6 @@ class StableDiffusionFineTuneVaeDataLoader(BaseDataLoader):
 
                 debug_modules if config.debug_mode else None,
             ],
-            train_progress
+            train_progress,
+            is_validation,
         )

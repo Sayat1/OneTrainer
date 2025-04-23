@@ -60,6 +60,7 @@ class GenerateLossesModel:
         )
         self.model.train_config = self.config
 
+        self.model_setup.setup_optimizations(self.model, self.config)
         self.model_setup.setup_model(self.model, self.config)
         self.model.eval()
         self.model.train_progress = TrainProgress()
@@ -83,7 +84,7 @@ class GenerateLossesModel:
         filename_loss_list: list[tuple[str, float]] = []
         # Don't really need a backward pass here, so we can make the calculation MUCH faster.
         with torch.inference_mode():
-            for epoch_step, batch in enumerate(step_tqdm):
+            for batch in step_tqdm:
                     model_output_data = self.model_setup.predict(
                         self.model,
                         batch,

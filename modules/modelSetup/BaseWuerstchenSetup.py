@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from random import Random
 
 from modules.model.WuerstchenModel import WuerstchenModel, WuerstchenModelEmbedding
 from modules.modelSetup.BaseModelSetup import BaseModelSetup
@@ -7,11 +8,11 @@ from modules.modelSetup.mixin.ModelSetupDiffusionLossMixin import ModelSetupDiff
 from modules.modelSetup.mixin.ModelSetupDiffusionMixin import ModelSetupDiffusionMixin
 from modules.modelSetup.mixin.ModelSetupEmbeddingMixin import ModelSetupEmbeddingMixin
 from modules.modelSetup.mixin.ModelSetupNoiseMixin import ModelSetupNoiseMixin
-from modules.modelSetup.stableDiffusion.checkpointing_util import (
+from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
+from modules.util.checkpointing_util import (
     enable_checkpointing_for_clip_encoder_layers,
     enable_checkpointing_for_stable_cascade_blocks,
 )
-from modules.module.AdditionalEmbeddingWrapper import AdditionalEmbeddingWrapper
 from modules.util.config.TrainConfig import TrainConfig
 from modules.util.conv_util import apply_circular_padding_to_conv2d
 from modules.util.dtype_util import (
@@ -19,15 +20,12 @@ from modules.util.dtype_util import (
     disable_bf16_on_fp16_autocast_context,
     disable_fp16_autocast_context,
 )
-from modules.util.enum.AttentionMechanism import AttentionMechanism
 from modules.util.enum.TrainingMethod import TrainingMethod
+from modules.util.quantization_util import quantize_layers
 from modules.util.TrainProgress import TrainProgress
 
 import torch
 from torch import Tensor
-
-from diffusers.models.attention_processor import Attention, AttnProcessor, AttnProcessor2_0, XFormersAttnProcessor
-from diffusers.utils import is_xformers_available
 
 
 class BaseWuerstchenSetup(
@@ -45,32 +43,13 @@ class BaseWuerstchenSetup(
             model: WuerstchenModel,
             config: TrainConfig,
     ):
-        if config.attention_mechanism == AttentionMechanism.DEFAULT:
-            for name, child_module in model.prior_prior.named_modules():
-                if isinstance(child_module, Attention):
-                    child_module.set_processor(AttnProcessor())
-        elif config.attention_mechanism == AttentionMechanism.XFORMERS and is_xformers_available():
-            try:
-                for name, child_module in model.prior_prior.named_modules():
-                    if isinstance(child_module, Attention):
-                        child_module.set_processor(XFormersAttnProcessor())
-            except Exception as e:
-                print(
-                    "Could not enable memory efficient attention. Make sure xformers is installed"
-                    f" correctly and a GPU is available: {e}"
-                )
-        elif config.attention_mechanism == AttentionMechanism.SDP:
-            for name, child_module in model.prior_prior.named_modules():
-                if isinstance(child_module, Attention):
-                    child_module.set_processor(AttnProcessor2_0())
-
-        if config.gradient_checkpointing:
+        if config.gradient_checkpointing.enabled():
             if model.model_type.is_wuerstchen_v2():
                 model.prior_prior.enable_gradient_checkpointing()
-                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, self.train_device)
+                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, config)
             elif model.model_type.is_stable_cascade():
-                enable_checkpointing_for_stable_cascade_blocks(model.prior_prior, self.train_device)
-                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, self.train_device)
+                enable_checkpointing_for_stable_cascade_blocks(model.prior_prior, config)
+                enable_checkpointing_for_clip_encoder_layers(model.prior_text_encoder, config)
 
         if config.force_circular_padding:
             apply_circular_padding_to_conv2d(model.decoder_vqgan)
@@ -113,21 +92,35 @@ class BaseWuerstchenSetup(
             config.enable_autocast_cache,
         )
 
-    def _setup_additional_embeddings(
+        if model.model_type.is_wuerstchen_v2():
+            quantize_layers(model.decoder_text_encoder, self.train_device, model.train_dtype)
+        quantize_layers(model.decoder_decoder, self.train_device, model.train_dtype)
+        quantize_layers(model.decoder_vqgan, self.train_device, model.train_dtype)
+        quantize_layers(model.effnet_encoder, self.train_device, model.effnet_encoder_train_dtype)
+        quantize_layers(model.prior_text_encoder, self.train_device, model.train_dtype)
+        quantize_layers(model.prior_prior, self.train_device, model.prior_train_dtype)
+
+    def _setup_embeddings(
             self,
             model: WuerstchenModel,
             config: TrainConfig,
     ):
-        model.additional_embeddings = []
-        for i, embedding_config in enumerate(config.additional_embeddings):
-            embedding_state = model.additional_embedding_states[i]
+        additional_embeddings = []
+        for embedding_config in config.all_embedding_configs():
+            embedding_state = model.embedding_state_dicts.get(embedding_config.uuid, None)
             if embedding_state is None:
                 embedding_state = self._create_new_embedding(
+                    model,
+                    embedding_config,
                     model.prior_tokenizer,
                     model.prior_text_encoder,
-                    config.additional_embeddings[i].initial_embedding_text,
-                    config.additional_embeddings[i].token_count,
+                    lambda text: model.encode_text(
+                        text=text,
+                        train_device=self.temp_device,
+                    )[0][0][1:],
                 )
+            else:
+                embedding_state = embedding_state.get("clip_g_out", embedding_state.get("clip_g", None))
 
             embedding_state = embedding_state.to(
                 dtype=model.prior_text_encoder.get_input_embeddings().weight.dtype,
@@ -135,36 +128,19 @@ class BaseWuerstchenSetup(
             ).detach()
 
             embedding = WuerstchenModelEmbedding(
-                embedding_config.uuid, embedding_state, embedding_config.placeholder,
+                embedding_config.uuid,
+                embedding_state,
+                embedding_config.placeholder,
+                embedding_config.is_output_embedding,
             )
-            model.additional_embeddings.append(embedding)
-            self._add_embedding_to_tokenizer(model.prior_tokenizer, embedding.text_tokens)
+            if embedding_config.uuid == config.embedding.uuid:
+                model.embedding = embedding
+            else:
+                additional_embeddings.append(embedding)
 
-    def _setup_embedding(
-            self,
-            model: WuerstchenModel,
-            config: TrainConfig,
-    ):
-        model.embedding = None
+            model.additional_embeddings = additional_embeddings
 
-        embedding_state = model.embedding_state
-        if embedding_state is None:
-            embedding_state = self._create_new_embedding(
-                model.prior_tokenizer,
-                model.prior_text_encoder,
-                config.embedding.initial_embedding_text,
-                config.embedding.token_count,
-            )
-
-        embedding_state = embedding_state.to(
-            dtype=model.prior_text_encoder.get_input_embeddings().weight.dtype,
-            device=self.train_device,
-        ).detach()
-
-        model.embedding = WuerstchenModelEmbedding(
-            config.embedding.uuid, embedding_state, config.embedding.placeholder,
-        )
-        self._add_embedding_to_tokenizer(model.prior_tokenizer, model.embedding.text_tokens)
+            self._add_embeddings_to_tokenizer(model.prior_tokenizer, model.all_prior_text_encoder_embeddings())
 
     def _setup_embedding_wrapper(
             self,
@@ -174,14 +150,20 @@ class BaseWuerstchenSetup(
         model.prior_embedding_wrapper = AdditionalEmbeddingWrapper(
             tokenizer=model.prior_tokenizer,
             orig_module=model.prior_text_encoder.text_model.embeddings.token_embedding,
-            additional_embeddings=[embedding.prior_text_encoder_vector for embedding in model.additional_embeddings]
-                                  + ([] if model.embedding is None else [model.embedding.prior_text_encoder_vector]),
-            additional_embedding_placeholders=[embedding.placeholder for embedding in model.additional_embeddings]
-                                  + ([] if model.embedding is None else [model.embedding.placeholder]),
-            additional_embedding_names=[embedding.uuid for embedding in model.additional_embeddings]
-                                  + ([] if model.embedding is None else [model.embedding.uuid]),
+            embeddings=model.all_prior_text_encoder_embeddings(),
         )
         model.prior_embedding_wrapper.hook_to_module()
+
+    def _setup_embeddings_requires_grad(
+            self,
+            model: WuerstchenModel,
+            config: TrainConfig,
+    ):
+        for embedding, embedding_config in zip(model.all_prior_text_encoder_embeddings(),
+                                               config.all_embedding_configs(), strict=True):
+            train_embedding = embedding_config.train and \
+                              not self.stop_embedding_training_elapsed(embedding_config, model.train_progress)
+            embedding.requires_grad_(train_embedding)
 
     def __alpha_cumprod(
             self,
@@ -214,8 +196,10 @@ class BaseWuerstchenSetup(
             elif model.model_type.is_stable_cascade():
                 scaled_latent_image = latent_image
 
+            batch_seed = 0 if deterministic else train_progress.global_step
             generator = torch.Generator(device=config.train_device)
-            generator.manual_seed(train_progress.global_step)
+            generator.manual_seed(batch_seed)
+            rand = Random(batch_seed)
 
             latent_noise = self._create_noise(scaled_latent_image, config, generator)
 
@@ -238,23 +222,19 @@ class BaseWuerstchenSetup(
                 self.__alpha_cumprod,
             )
 
-            if config.text_encoder.train or config.train_any_embedding():
-                text_encoder_output = model.prior_text_encoder(
-                    batch['tokens'], output_hidden_states=True, return_dict=True
-                )
-                if model.model_type.is_wuerstchen_v2():
-                    final_layer_norm = model.prior_text_encoder.text_model.final_layer_norm
-                    text_embedding = final_layer_norm(
-                        text_encoder_output.hidden_states[-(1 + config.text_encoder_layer_skip)]
-                    )
-                if model.model_type.is_stable_cascade():
-                    text_embedding = text_encoder_output.hidden_states[-(1 + config.text_encoder_layer_skip)]
-                    if model.model_type.is_stable_cascade():
-                        pooled_text_text_embedding = text_encoder_output.text_embeds.unsqueeze(1)
-            else:
-                text_embedding = batch['text_encoder_hidden_state']
-                if model.model_type.is_stable_cascade():
-                    pooled_text_text_embedding = batch['pooled_text_encoder_output'].unsqueeze(1)
+            text_embedding, pooled_text_text_embedding = model.encode_text(
+                train_device=self.train_device,
+                batch_size=batch['latent_image'].shape[0],
+                rand=rand,
+                tokens=batch['tokens'],
+                tokens_mask=batch['tokens_mask'],
+                text_encoder_layer_skip=config.text_encoder_layer_skip,
+                text_encoder_output=batch[
+                    'text_encoder_hidden_state'] if not config.train_text_encoder_or_embedding() else None,
+                pooled_text_encoder_output=batch[
+                    'pooled_text_encoder_output'] if not config.train_text_encoder_or_embedding() else None,
+                text_encoder_dropout_probability=config.text_encoder.dropout_probability,
+            )
 
             latent_input = scaled_noisy_latent_image
 

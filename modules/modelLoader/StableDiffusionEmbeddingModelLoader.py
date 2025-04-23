@@ -17,7 +17,7 @@ class StableDiffusionEmbeddingModelLoader(
     InternalModelLoaderMixin,
 ):
     def __init__(self):
-        super(StableDiffusionEmbeddingModelLoader, self).__init__()
+        super().__init__()
 
     def _default_model_spec_name(
             self,
@@ -54,13 +54,11 @@ class StableDiffusionEmbeddingModelLoader(
         embedding_loader = StableDiffusionEmbeddingLoader()
 
         model = StableDiffusionModel(model_type=model_type,train_config=train_config)
+        self._load_internal_data(model, model_names.embedding.model_name)
+        model.model_spec = self._load_default_model_spec(model_type)
 
         if model_names.base_model:
             base_model_loader.load(model, model_type, model_names, weight_dtypes)
-        embedding_loader.load_multiple(model, model_names)
-        embedding_loader.load_single(model, model_names)
-        self._load_internal_data(model, model_names.embedding.model_name)
-
-        model.model_spec = self._load_default_model_spec(model_type)
+        embedding_loader.load(model, model_names.embedding.model_name, model_names)
 
         return model

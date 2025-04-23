@@ -14,8 +14,10 @@ from modules.module.WDModel import WDModel
 from modules.ui.GenerateCaptionsWindow import GenerateCaptionsWindow
 from modules.ui.GenerateMasksWindow import GenerateMasksWindow
 from modules.util import path_util
+from modules.util.image_util import load_image
 from modules.util.torch_util import default_device
 from modules.util.ui import components
+from modules.util.ui.ui_utils import bind_mousewheel, set_window_icon
 from modules.util.ui.UIState import UIState
 
 import torch
@@ -35,60 +37,33 @@ class CaptionUI(ctk.CTkToplevel):
             initial_include_subdirectories: bool,
             *args,
             **kwargs,
-    ):
-        ctk.CTkToplevel.__init__(self, parent, *args, **kwargs)
+    ) -> None:
+        super().__init__(parent, *args, **kwargs)
+
 
         self.dir = initial_dir
-        self.config_ui_data = {
-            "include_subdirectories": initial_include_subdirectories
-        }
+        self.config_ui_data = {"include_subdirectories": initial_include_subdirectories}
         self.config_ui_state = UIState(self, self.config_ui_data)
         self.image_size = 850
-
-        self.title("OneTrainer")
-        self.geometry("1280x980")
-        self.resizable(False, False)
-        self.wait_visibility()
-        self.focus_set()
-
         self.help_text = """
-Keyboard shortcuts when focusing on the prompt input field:
-Up arrow: previous image
-Down arrow: next image
-Return: save
-Ctrl+M: only show the mask
-Ctrl+D: draw mask editing mode
-Ctrl+F: fill mask editing mode
+    Keyboard shortcuts when focusing on the prompt input field:
+    Up arrow: previous image
+    Down arrow: next image
+    Return: save
+    Ctrl+M: only show the mask
+    Ctrl+D: draw mask editing mode
+    Ctrl+F: fill mask editing mode
 
-When editing masks:
-Left click: add mask
-Right click: remove mask
-Mouse wheel: increase or decrease brush size"""
-
+    When editing masks:
+    Left click: add mask
+    Right click: remove mask
+    Mouse wheel: increase or decrease brush size"""
         self.masking_model = None
         self.captioning_model = None
-
-        self.grid_rowconfigure(0, weight=0)
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-
-        # relative path from self.dir to each image
         self.image_rel_paths = []
         self.current_image_index = -1
-
-        self.top_bar(self)
-
-        self.bottom_frame = ctk.CTkFrame(self)
-        self.bottom_frame.grid(row=1, column=0, sticky="nsew")
-
-        self.bottom_frame.grid_rowconfigure(0, weight=1)
-        self.bottom_frame.grid_columnconfigure(0, weight=0)
-        self.bottom_frame.grid_columnconfigure(1, weight=1)
-
         self.file_list = None
         self.image_labels = []
-        self.file_list_column(self.bottom_frame)
-
         self.pil_image = None
         self.image_width = 0
         self.image_height = 0
@@ -104,9 +79,33 @@ Mouse wheel: increase or decrease brush size"""
         self.mask_editing_alpha = None
         self.prompt_var = None
         self.prompt_component = None
-        self.content_column(self.bottom_frame)
 
+
+        self.title("OneTrainer")
+        self.geometry("1280x980")
+        self.resizable(False, False)
+
+
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+
+        self.top_bar(self)
+
+        self.bottom_frame = ctk.CTkFrame(self)
+        self.bottom_frame.grid(row=1, column=0, sticky="nsew")
+        self.bottom_frame.grid_rowconfigure(0, weight=1)
+        self.bottom_frame.grid_columnconfigure(0, weight=0)
+        self.bottom_frame.grid_columnconfigure(1, weight=1)
+
+        self.file_list_column(self.bottom_frame)
+        self.content_column(self.bottom_frame)
         self.load_directory()
+
+        self.wait_visibility()
+        self.focus_set()
+        self.after(200, lambda: set_window_icon(self))
 
     def top_bar(self, master):
         top_frame = ctk.CTkFrame(master)
@@ -195,7 +194,7 @@ Mouse wheel: increase or decrease brush size"""
         self.image_label.bind("<Motion>", self.edit_mask)
         self.image_label.bind("<Button-1>", self.edit_mask)
         self.image_label.bind("<Button-3>", self.edit_mask)
-        self.image_label.bind("<MouseWheel>", self.draw_mask_radius)
+        bind_mousewheel(self.image_label, {self.image_label.children["!label"]}, self.draw_mask_radius)
 
         # prompt
         self.prompt_var = ctk.StringVar()
@@ -255,8 +254,8 @@ Mouse wheel: increase or decrease brush size"""
             image_name = os.path.join(self.dir, image_name)
 
         try:
-            return Image.open(image_name).convert('RGB')
-        except:
+            return load_image(image_name, convert_mode="RGB")
+        except Exception:
             print(f'Could not open image {image_name}')
 
     def load_mask(self):
@@ -266,8 +265,8 @@ Mouse wheel: increase or decrease brush size"""
             mask_name = os.path.join(self.dir, mask_name)
 
             try:
-                return Image.open(mask_name).convert('RGB')
-            except:
+                return load_image(mask_name, convert_mode='RGB')
+            except Exception:
                 return None
         else:
             return None
@@ -281,7 +280,7 @@ Mouse wheel: increase or decrease brush size"""
             try:
                 with open(prompt_name, "r", encoding='utf-8') as f:
                     return f.readlines()[0].strip()
-            except:
+            except Exception:
                 return ""
         else:
             return ""
@@ -351,12 +350,10 @@ Mouse wheel: increase or decrease brush size"""
         else:
             self.image.configure(light_image=self.pil_image, size=self.pil_image.size)
 
-    def draw_mask_radius(self, event):
-        if event.widget != self.image_label.children["!label"]:
-            return
-
-        delta = 1.0 + (-np.sign(event.delta) * 0.05)
-        self.mask_draw_radius *= delta
+    def draw_mask_radius(self, delta, raw_event):
+        # Wheel up = Increase radius. Wheel down = Decrease radius.
+        multiplier = 1.0 + (delta * 0.05)
+        self.mask_draw_radius = max(0.0025, self.mask_draw_radius * multiplier)
 
     def edit_mask(self, event):
         if not self.enable_mask_editing_var.get():
@@ -400,7 +397,7 @@ Mouse wheel: increase or decrease brush size"""
         if is_left:
             try:
                 alpha = float(self.mask_editing_alpha.get())
-            except:
+            except Exception:
                 alpha = 1.0
             rgb_value = int(max(0.0, min(alpha, 1.0)) * 255)  # max/min stuff to clamp to 0 - 255 range
             color = (rgb_value, rgb_value, rgb_value)
@@ -435,7 +432,7 @@ Mouse wheel: increase or decrease brush size"""
         if is_left:
             try:
                 alpha = float(self.mask_editing_alpha.get())
-            except:
+            except Exception:
                 alpha = 1.0
             rgb_value = int(max(0.0, min(alpha, 1.0)) * 255)  # max/min stuff to clamp to 0 - 255 range
             color = (rgb_value, rgb_value, rgb_value)
@@ -470,14 +467,11 @@ Mouse wheel: increase or decrease brush size"""
             try:
                 with open(prompt_name, "w", encoding='utf-8') as f:
                     f.write(self.prompt_var.get())
-            except:
-                return ""
+            except Exception:
+                return
 
             if self.pil_mask:
                 self.pil_mask.save(mask_name)
-
-        else:
-            return ""
 
     def draw_mask_editing_mode(self, *args):
         self.mask_editing_mode = 'draw'
@@ -485,6 +479,7 @@ Mouse wheel: increase or decrease brush size"""
         if args:
             # disable default event
             return "break"
+        return None
 
     def fill_mask_editing_mode(self, *args):
         self.mask_editing_mode = 'fill'
@@ -515,7 +510,7 @@ Mouse wheel: increase or decrease brush size"""
             image_name = self.image_rel_paths[self.current_image_index]
             image_name = os.path.realpath(os.path.join(self.dir, image_name))
             subprocess.Popen(f"explorer /select,{image_name}")
-        except:
+        except Exception:
             traceback.print_exc()
 
     def load_masking_model(self, model):
