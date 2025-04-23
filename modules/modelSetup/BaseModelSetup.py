@@ -95,19 +95,18 @@ class BaseModelSetup(
             self,
             model: BaseModel,
             config: TrainConfig,
-            scheduler: LRScheduler,
+            schedulers: list[LRScheduler],
             tensorboard: SummaryWriter,
     ) -> dict[str,float]:
-        lrs = scheduler.get_last_lr()
-        parameters = model.parameters.display_name_mapping
-
         reported_learning_rates = {}
-        for lr, parameter in zip(lrs, parameters, strict=True):
-            # only use the prefix. this prevents multiple embedding reports. TODO: find a better solution
-            name = parameter.split('/')[0]
+        for i,scheduler in enumerate(schedulers):
+            lrs = scheduler.get_last_lr()
+            for lr in lrs:
+                # only use the prefix. this prevents multiple embedding reports. TODO: find a better solution
+                name = f"group{i}"
 
-            if name not in reported_learning_rates:
-                reported_learning_rates[name] = lr
+                if name not in reported_learning_rates:
+                    reported_learning_rates[name] = lr
 
         reported_learning_rates = config.optimizer.optimizer.maybe_adjust_lrs(reported_learning_rates, model.optimizers)
 

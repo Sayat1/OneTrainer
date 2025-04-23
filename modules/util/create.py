@@ -407,6 +407,7 @@ def create_optimizer(
         parameter_group_collection: NamedParameterGroupCollection,
         state_dict: dict | None,
         config: TrainConfig,
+        preset_parameters=None
 ) -> torch.optim.Optimizer | None:
     optimizer = None
     optimizer_config = config.optimizer
@@ -419,8 +420,8 @@ def create_optimizer(
                 and config.training_method == TrainingMethod.FINE_TUNE:
             raise RuntimeError('layer offloading can only be used for fine tuning when using an optimizer that supports "fused_back_pass"')
 
-    if parameter:
-        parameters = parameter
+    if preset_parameters:
+        parameters = preset_parameters
     else:
         parameters = parameter_group_collection.parameters_for_optimizer(config)
         
@@ -1154,7 +1155,7 @@ def create_ema(
 def create_lr_scheduler(
         config: TrainConfig,
         optimizer: torch.optim.Optimizer,
-        learning_rate_schedulers: list[LearningRateScheduler],
+        learning_rate_scheduler: LearningRateScheduler,
         warmup_steps: int | float,
         num_cycles: float,
         min_factor: float,
@@ -1247,8 +1248,8 @@ def create_lr_scheduler(
                         value = ast.literal_eval(value)
                 args[key] = value
             scheduler = klass(optimizer=optimizer,
-                              last_epoch=int(global_step / gradient_accumulation_steps) - 1,
-                              **args)
+                                last_epoch=int(global_step / gradient_accumulation_steps) - 1,
+                                **args)
             if warmup_steps > 0:
                 warmup_scheduler = LambdaLR(
                     optimizer=optimizer,

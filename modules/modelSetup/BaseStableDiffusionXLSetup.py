@@ -276,14 +276,6 @@ class BaseStableDiffusionXLSetup(
                 inp_noisy_latents = scaled_noisy_latent_image / ((sigmas**2 + 1) ** 0.5)
                 weighting = (sigmas**-2.0).float()
 
-            added_cond_kwargs = {"text_embeds": pooled_text_encoder_2_output, "time_ids": add_time_ids}
-            predicted_latent_noise = model.unet(
-                sample=latent_input.to(dtype=model.train_dtype.torch_dtype()),
-                timestep=timestep,
-                encoder_hidden_states=text_encoder_output.to(dtype=model.train_dtype.torch_dtype()),
-                added_cond_kwargs=added_cond_kwargs,
-            ).sample
-
             if config.model_type.has_mask_input() and config.model_type.has_conditioning_image_input():
                 latent_input = torch.concat(
                     [inp_noisy_latents if config.do_edm_style_training else scaled_noisy_latent_image \

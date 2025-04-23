@@ -577,17 +577,17 @@ class GenericTrainer(BaseTrainer):
                             if scaler:
                                 def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
                                     if self.__is_update_step(self.model.train_progress):
-                                        scaler.unscale_parameter_(tensor, self.model.optimizer)
+                                        scaler.unscale_parameter_(tensor, optimizer)
                                         if self.config.clip_grad_norm is not None:
                                             nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
-                                        scaler.maybe_opt_step_parameter(tensor, param_group, i, self.model.optimizer)
+                                        scaler.maybe_opt_step_parameter(tensor, param_group, i, optimizer)
                                         tensor.grad = None
                             else:
                                 def __grad_hook(tensor: Tensor, param_group=param_group, i=i):
                                     if self.__is_update_step(self.model.train_progress):
                                         if self.config.clip_grad_norm is not None:
                                             nn.utils.clip_grad_norm_(tensor, self.config.clip_grad_norm)
-                                        self.model.optimizer.step_parameter(tensor, param_group, i)
+                                        optimizer.step_parameter(tensor, param_group, i)
                                         tensor.grad = None
 
                             handle = parameter.register_post_accumulate_grad_hook(__grad_hook)
@@ -644,26 +644,28 @@ class GenericTrainer(BaseTrainer):
 
             torch_gc()
 
+            lr_schedulers_blueprint = []
             lr_schedulers = []
             if self.config.text_encoder.train:
-                lr_schedulers.append(self.config.te1_learning_rate_scheduler if self.config.te1_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
+                lr_schedulers_blueprint.append(self.config.te1_learning_rate_scheduler if self.config.te1_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
             if self.config.text_encoder_2.train:
-                lr_schedulers.append(self.config.te2_learning_rate_scheduler if self.config.te2_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
+                lr_schedulers_blueprint.append(self.config.te2_learning_rate_scheduler if self.config.te2_learning_rate_scheduler!=None else self.config.learning_rate_scheduler)
             if self.config.unet.train:
-                lr_schedulers.append(self.config.learning_rate_scheduler)
-            if lr_scheduler is None:
-                lr_scheduler = create.create_lr_scheduler(
-                    config=self.config,
-                    optimizer=self.model.optimizers[0],
-                    learning_rate_scheduler=lr_schedulers,
-                    warmup_steps=self.config.learning_rate_warmup_steps,
-                    num_cycles=self.config.learning_rate_cycles,
-                    min_factor=self.config.learning_rate_min_factor,
-                    num_epochs=self.config.epochs,
-                    approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
-                    batch_size=self.config.batch_size,
-                    gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    global_step=train_progress.global_step,
+                lr_schedulers_blueprint.append(self.config.learning_rate_scheduler)
+            for opt,lr_blueprint in zip(self.model.optimizers,lr_schedulers_blueprint):
+                lr_schedulers.append(create.create_lr_scheduler(
+                        config=self.config,
+                        optimizer=opt,
+                        learning_rate_scheduler=lr_blueprint,
+                        warmup_steps=self.config.learning_rate_warmup_steps,
+                        num_cycles=self.config.learning_rate_cycles,
+                        min_factor=self.config.learning_rate_min_factor,
+                        num_epochs=self.config.epochs,
+                        approximate_epoch_length=self.data_loader.get_data_set().approximate_length(),
+                        batch_size=self.config.batch_size,
+                        gradient_accumulation_steps=self.config.gradient_accumulation_steps,
+                        global_step=train_progress.global_step,
+                    )
                 )
 
             current_epoch_length = self.data_loader.get_data_set().approximate_length()
@@ -729,25 +731,26 @@ class GenericTrainer(BaseTrainer):
 
                     if self.__is_update_step(train_progress):
                         if scaler and self.config.optimizer.optimizer.supports_fused_back_pass() and self.config.optimizer.fused_back_pass:
-                            scaler.step_after_unscale_parameter_(self.model.optimizer)
+                            [scaler.step_after_unscale_parameter_(optimizer) for optimizer in self.model.optimizers]
                             scaler.update()
                         elif scaler:
-                            scaler.unscale_(self.model.optimizer)
+                            [scaler.unscale_(optimizer) for optimizer in self.model.optimizers]
                             if self.config.clip_grad_norm is not None:
                                 nn.utils.clip_grad_norm_(self.parameters, self.config.clip_grad_norm)
-                            scaler.step(self.model.optimizer)
+                            [scaler.step(optimizer) for optimizer in self.model.optimizers]     
                             scaler.update()
                         else:
                             if self.config.clip_grad_norm is not None:
                                 nn.utils.clip_grad_norm_(self.parameters, self.config.clip_grad_norm)
-                            self.model.optimizer.step()
+                            [optimizer.step() for optimizer in self.model.optimizers]   
+                            
 
-                        lr_scheduler.step()  # done before zero_grad, because some lr schedulers need gradients
-                        self.model.optimizer.zero_grad(set_to_none=True)
+                        [lr_scheduler.step() for lr_scheduler in lr_schedulers]  # done before zero_grad, because some lr schedulers need gradients
+                        [optimizer.zero_grad(set_to_none=True) for optimizer in self.model.optimizers] 
                         has_gradient = False
 
                         reported_lr = self.model_setup.report_to_tensorboard(
-                            self.model, self.config, lr_scheduler, self.tensorboard
+                            self.model, self.config, lr_schedulers, self.tensorboard
                         )
 
                         self.tensorboard.add_scalar("loss/train_step", accumulated_loss, train_progress.global_step)
@@ -755,11 +758,12 @@ class GenericTrainer(BaseTrainer):
                         ema_loss_steps += 1
                         ema_loss_decay = min(0.99, 1 - (1 / ema_loss_steps))
                         ema_loss = (ema_loss * ema_loss_decay) + (accumulated_loss * (1 - ema_loss_decay))
-                        step_tqdm.set_postfix({
+                        update_reports = {
                             'loss': accumulated_loss,
                             'smooth loss': ema_loss,
-                        })
-                        step_tqdm.update(reported_lr)
+                        }
+                        update_reports.update(reported_lr)
+                        step_tqdm.set_postfix(update_reports)
                         self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
                         accumulated_loss = 0.0
 
