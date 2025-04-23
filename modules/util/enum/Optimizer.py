@@ -52,6 +52,7 @@ class Optimizer(Enum):
 
     # Prodigy
     PRODIGY = 'PRODIGY'
+    PRODIGY_PLUS_SCHEDULE_FREE = 'PRODIGY_PLUS_SCHEDULE_FREE'
 
     # ADAFACTOR
     ADAFACTOR = 'ADAFACTOR'
@@ -65,6 +66,7 @@ class Optimizer(Enum):
     AIDA = 'AIDA'
     SOAP = 'SOAP'
     StableAdamW = 'StableAdamW'
+    YOGI = 'YOGI'
 
     @property
     def is_adaptive(self):
@@ -75,6 +77,7 @@ class Optimizer(Enum):
             self.DADAPT_ADA_GRAD,
             self.DADAPT_LION,
             self.PRODIGY,
+            self.PRODIGY_PLUS_SCHEDULE_FREE,
         ]
 
     @property
@@ -82,6 +85,7 @@ class Optimizer(Enum):
         return self in [
             self.SCHEDULE_FREE_ADAMW,
             self.SCHEDULE_FREE_SGD,
+            self.PRODIGY_PLUS_SCHEDULE_FREE,
         ]
 
     def supports_fused_back_pass(self):
@@ -90,31 +94,17 @@ class Optimizer(Enum):
             Optimizer.CAME,
             Optimizer.ADAM,
             Optimizer.ADAMW,
+            Optimizer.PRODIGY_PLUS_SCHEDULE_FREE,
         ]
 
     # Small helper for adjusting learning rates to adaptive optimizers.
     def maybe_adjust_lrs(self, lrs: dict[str, float], optimizer: torch.optim.Optimizer):
         dlrs= lrs.copy()
         if self.is_adaptive:
-            for i,item in enumerate(lrs.items()):
-                if "dlr" in optimizer.param_groups[i]:
-                    dlrs.update({f"dlr[{i}]":optimizer.param_groups[i]["dlr"]})
-                else:
-                    dlrs.update({f"dlr[{i}]":float(item[1])*optimizer.param_groups[i]["d"]})
-            return dlrs
-        elif self.is_schedule_free or "schedulefree" in type(optimizer).__name__.lower():
-            for i,item in enumerate(lrs.items()):
-                if "lr_max" in optimizer.param_groups[i]:
-                    dlrs.update({f"lr_max[{i}]":optimizer.param_groups[i]["lr_max"]})
-                else:
-                    dlrs.update({item[0]:float(item[1])})
-            return dlrs
-        if "mecha" in type(optimizer).__name__.lower():
-            s = optimizer.state['_mechanic']['s']
-            s_sum = torch.sum(s).item()
-            for i,item in enumerate(lrs.items()):
-                dlrs.update({f"s*lr[{i}]":float(item[1])*s_sum})
-            return dlrs
+            return {
+                key: (lr * optimizer.param_groups[i].get("d", 1.0) if lr is not None else None)
+                for i, (key, lr) in enumerate(lrs.items())
+            }
         return lrs
 
     def __str__(self):

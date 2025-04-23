@@ -75,7 +75,7 @@ class GenericTrainer(BaseTrainer):
 
         tensorboard_log_dir = os.path.join(config.workspace_dir, "tensorboard")
         os.makedirs(Path(tensorboard_log_dir).absolute(), exist_ok=True)
-        self.tensorboard = SummaryWriter(os.path.join(tensorboard_log_dir, get_string_timestamp()))
+        self.tensorboard = SummaryWriter(os.path.join(tensorboard_log_dir, f"{config.save_filename_prefix}{get_string_timestamp()}"))
         if config.tensorboard:
             super()._start_tensorboard()
 
@@ -532,7 +532,9 @@ class GenericTrainer(BaseTrainer):
         torch_gc()
 
     def __needs_sample(self, train_progress: TrainProgress):
-        return self.repeating_action_needed(
+        return self.single_action_elapsed(
+            "sample_skip_first", self.config.sample_skip_first, self.config.sample_after_unit, train_progress
+        ) and self.repeating_action_needed(
             "sample", self.config.sample_after, self.config.sample_after_unit, train_progress
         )
 
@@ -755,7 +757,8 @@ class GenericTrainer(BaseTrainer):
                         step_tqdm.set_postfix({
                             'loss': accumulated_loss,
                             'smooth loss': ema_loss,
-                        },**reported_lr)
+                        })
+                        step_tqdm.update(reported_lr)
                         self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
                         accumulated_loss = 0.0
 
@@ -803,15 +806,21 @@ class GenericTrainer(BaseTrainer):
             self.callbacks.on_update_status("saving the final model")
 
             if self.model.ema:
-                self.model.ema.copy_ema_to(self.parameters, store_temp=True)
-
-            print("Saving " + self.config.output_model_destination)
+                self.model.ema.copy_ema_to(self.parameters, store_temp=False)
+            if os.path.isdir(self.config.output_model_destination) and self.config.output_model_format.is_single_file():
+                save_path = os.path.join(
+                    self.config.output_model_destination,
+                    f"{self.config.save_filename_prefix}{get_string_timestamp()}{self.config.output_model_format.file_extension()}"
+                )
+            else:
+                save_path = self.config.output_model_destination
+            print("Saving " + save_path)
 
             self.model_saver.save(
                 model=self.model,
                 model_type=self.config.model_type,
                 output_model_format=self.config.output_model_format,
-                output_model_destination=self.config.output_model_destination,
+                output_model_destination=save_path,
                 dtype=self.config.output_dtype.torch_dtype()
             )
         elif self.model is not None:
