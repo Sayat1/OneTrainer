@@ -2,8 +2,6 @@ import copy
 import os.path
 from pathlib import Path
 
-from safetensors.torch import save_file
-
 from modules.model.FluxModel import FluxModel
 from modules.modelSaver.mixin.DtypeModelSaverMixin import DtypeModelSaverMixin
 from modules.util.convert.convert_flux_diffusers_to_ckpt import convert_flux_diffusers_to_ckpt
@@ -13,10 +11,14 @@ import torch
 
 from transformers import T5EncoderModel
 
+from safetensors.torch import save_file
+
 
 class FluxModelSaver(
     DtypeModelSaverMixin,
 ):
+    def __init__(self):
+        super().__init__()
 
     def __save_diffusers(
             self,
@@ -66,14 +68,6 @@ class FluxModelSaver(
         if dtype is not None:
             del save_pipeline
 
-    def __save_ckpt(
-            self,
-            model: FluxModel,
-            destination: str,
-            dtype: torch.dtype | None,
-    ):
-        pass
-
     def __save_safetensors(
             self,
             model: FluxModel,
@@ -107,8 +101,6 @@ class FluxModelSaver(
         match output_model_format:
             case ModelFormat.DIFFUSERS:
                 self.__save_diffusers(model, output_model_destination, dtype)
-            case ModelFormat.CKPT:
-                self.__save_ckpt(model, output_model_destination, dtype)
             case ModelFormat.SAFETENSORS:
                 self.__save_safetensors(model, output_model_destination, dtype)
             case ModelFormat.INTERNAL:

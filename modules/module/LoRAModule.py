@@ -27,7 +27,7 @@ class PeftBase(nn.Module):
 
     def __init__(self, prefix: str, orig_module: nn.Module | None):
         super().__init__()
-        self.prefix = prefix.replace('.', '_') + '.'
+        self.prefix = prefix + '.'
         self._orig_module = [orig_module] if orig_module else None
         self.is_applied = False
         self.layer_kwargs = {}
