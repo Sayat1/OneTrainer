@@ -190,6 +190,7 @@ class StableDiffusionXLModelLoader(
                 original_config=model.sd_config_filename,
                 safety_checker=None,
                 use_safetensors=True,
+                torch_dtype=weight_dtypes.unet,
             )
 
         noise_scheduler = create.create_noise_scheduler(
