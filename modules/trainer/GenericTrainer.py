@@ -843,19 +843,19 @@ class GenericTrainer(BaseTrainer):
 
         self.model.to(self.temp_device)
 
-            if self.model.ema:
-                self.model.ema.copy_temp_to(self.parameters)
-                dest_path = Path(self.config.output_model_destination)
-                non_ema_dest_path = str(dest_path.parent/f"{dest_path.stem}-non_ema{dest_path.suffix}")
-                print("Saving non-ema " + non_ema_dest_path)
+        if self.model.ema:
+            self.model.ema.copy_temp_to(self.parameters)
+            dest_path = Path(self.config.output_model_destination)
+            non_ema_dest_path = str(dest_path.parent/f"{dest_path.stem}-non_ema{dest_path.suffix}")
+            print("Saving non-ema " + non_ema_dest_path)
 
-                self.model_saver.save(
-                    model=self.model,
-                    model_type=self.config.model_type,
-                    output_model_format=self.config.output_model_format,
-                    output_model_destination=non_ema_dest_path,
-                    dtype=self.config.output_dtype.torch_dtype()
-                )
+            self.model_saver.save(
+                model=self.model,
+                model_type=self.config.model_type,
+                output_model_format=self.config.output_model_format,
+                output_model_destination=non_ema_dest_path,
+                dtype=self.config.output_dtype.torch_dtype()
+            )
 
         self.tensorboard.close()
 
