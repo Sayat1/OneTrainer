@@ -755,11 +755,12 @@ class GenericTrainer(BaseTrainer):
                         ema_loss_steps += 1
                         ema_loss_decay = min(0.99, 1 - (1 / ema_loss_steps))
                         ema_loss = (ema_loss * ema_loss_decay) + (accumulated_loss * (1 - ema_loss_decay))
-                        step_tqdm.set_postfix({
+                        update_reports = {
                             'loss': accumulated_loss,
                             'smooth loss': ema_loss,
-                        })
-                        step_tqdm.update(reported_lr)
+                        }
+                        update_reports.update(reported_lr)
+                        step_tqdm.set_postfix(update_reports)
                         self.tensorboard.add_scalar("smooth_loss/train_step", ema_loss, train_progress.global_step)
                         accumulated_loss = 0.0
 
