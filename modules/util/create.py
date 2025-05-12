@@ -931,6 +931,7 @@ def create_optimizer(
                 use_adopt=optimizer_config.use_adopt if optimizer_config.use_adopt is not None else False,
                 use_focus=optimizer_config.use_focus if optimizer_config.use_focus is not None else False,
                 stochastic_rounding=optimizer_config.stochastic_rounding if optimizer_config.stochastic_rounding is not None else True,
+                **optimizer_config.extra
             )
 
         # ADAFactor Optimizer
