@@ -1173,141 +1173,145 @@ def create_lr_scheduler(
 
     scheduler_steps = total_steps - warmup_steps
 
-    # Force schedule-free algorithms to constant schedule.
-    if config.optimizer.optimizer.is_schedule_free:
-        learning_rate_scheduler = LearningRateScheduler.CONSTANT
+    lr_lambdas = []
+    for learning_rate_scheduler in learning_rate_schedulers:
+        # Force schedule-free algorithms to constant schedule.
+        if config.optimizer.optimizer.is_schedule_free:
+            learning_rate_scheduler = LearningRateScheduler.CONSTANT
 
-    match learning_rate_scheduler:
-        case LearningRateScheduler.CONSTANT:
-            lr_lambda = lr_lambda_constant()
+        match learning_rate_scheduler:
+            case LearningRateScheduler.CONSTANT:
+                lr_lambda = lr_lambda_constant()
 
-        case LearningRateScheduler.LINEAR:
-            lr_lambda = lr_lambda_linear(
-                scheduler_steps, min_factor
-            )
+            case LearningRateScheduler.LINEAR:
+                lr_lambda = lr_lambda_linear(
+                    scheduler_steps, min_factor
+                )
 
-        case LearningRateScheduler.COSINE:
-            lr_lambda = lr_lambda_cosine(
-                scheduler_steps, min_factor
-            )
+            case LearningRateScheduler.COSINE:
+                lr_lambda = lr_lambda_cosine(
+                    scheduler_steps, min_factor
+                )
 
-        case LearningRateScheduler.COSINE_WITH_RESTARTS:
-            lr_lambda = lr_lambda_cosine_with_restarts(
-                scheduler_steps, num_cycles, min_factor
-            )
+            case LearningRateScheduler.COSINE_WITH_RESTARTS:
+                lr_lambda = lr_lambda_cosine_with_restarts(
+                    scheduler_steps, num_cycles, min_factor
+                )
 
-        case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
-            lr_lambda = lr_lambda_cosine_with_hard_restarts(
-                scheduler_steps, num_cycles, min_factor
-            )
+            case LearningRateScheduler.COSINE_WITH_HARD_RESTARTS:
+                lr_lambda = lr_lambda_cosine_with_hard_restarts(
+                    scheduler_steps, num_cycles, min_factor
+                )
 
-        case LearningRateScheduler.REX:
-            lr_lambda = lr_lambda_rex(
-                scheduler_steps, min_factor
-            )
+            case LearningRateScheduler.REX:
+                lr_lambda = lr_lambda_rex(
+                    scheduler_steps, min_factor
+                )
 
-        case LearningRateScheduler.ADAFACTOR:
-            from transformers.optimization import AdafactorSchedule
-            return AdafactorSchedule(
-                optimizer,
-                initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
-            )
-        case LearningRateScheduler.CUSTOM:
-            # Special case. Unlike the others, we return from here.
-            if not config.custom_learning_rate_scheduler:
-                raise AssertionError("Must specify a class when using a custom LR scheduler.")
-            if "." not in config.custom_learning_rate_scheduler:
-                raise AssertionError("Custom class name must be in the format <module>.<class>")
-            klass = config.custom_learning_rate_scheduler.split(".")[-1]
-            module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
-            module = importlib.import_module(module)
-            klass = getattr(module, klass)
-            # Compile arguments into single dict.
-            args = {}
-            for pd in config.scheduler_params:
-                key = pd["key"]
-                value = pd["value"]
-                # Special values
-                match value:
-                    case "%LR%":
-                        value = config.learning_rate
-                    case "%EPOCHS%":
-                        value = num_epochs
-                    case "%STEPS_PER_EPOCH%":
-                        value = steps_per_epoch
-                    case "%TOTAL_STEPS%":
-                        value = total_steps
-                    case "%SCHEDULER_STEPS%":
-                        value = scheduler_steps
-                    case _:
-                        value = ast.literal_eval(value)
-                args[key] = value
-            scheduler = klass(optimizer=optimizer,
-                              last_epoch=int(global_step / gradient_accumulation_steps) - 1,
-                              **args)
-            if warmup_steps > 0:
-                warmup_scheduler = LambdaLR(
-                    optimizer=optimizer,
-                    lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
-                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
-                scheduler = SequentialLR(
+            case LearningRateScheduler.ADAFACTOR:
+                from transformers.optimization import AdafactorSchedule
+                return AdafactorSchedule(
                     optimizer,
                     initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
                 )
-        case LearningRateScheduler.CUSTOM:
-            # Special case. Unlike the others, we return from here.
-            if not config.custom_learning_rate_scheduler:
-                raise AssertionError("Must specify a class when using a custom LR scheduler.")
-            if "." not in config.custom_learning_rate_scheduler:
-                raise AssertionError("Custom class name must be in the format <module>.<class>")
-            klass = config.custom_learning_rate_scheduler.split(".")[-1]
-            module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
-            module = importlib.import_module(module)
-            klass = getattr(module, klass)
-            # Compile arguments into single dict.
-            args = {}
-            for pd in config.scheduler_params:
-                key = pd["key"]
-                value = pd["value"]
-                # Special values
-                match value:
-                    case "%LR%":
-                        value = config.learning_rate
-                    case "%EPOCHS%":
-                        value = num_epochs
-                    case "%STEPS_PER_EPOCH%":
-                        value = steps_per_epoch
-                    case "%TOTAL_STEPS%":
-                        value = total_steps
-                    case "%SCHEDULER_STEPS%":
-                        value = scheduler_steps
-                    case _:
-                        value = ast.literal_eval(value)
-                args[key] = value
-            scheduler = klass(optimizer=optimizer,
-                            last_epoch=int(global_step / gradient_accumulation_steps) - 1,
-                            **args)
-            if warmup_steps > 0:
-                warmup_scheduler = LambdaLR(
-                    optimizer=optimizer,
-                    lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
-                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
-                scheduler = SequentialLR(
-                    optimizer,
-                    schedulers=[warmup_scheduler, scheduler],
-                    milestones=[warmup_steps],
-                    last_epoch=int(global_step / gradient_accumulation_steps) - 1)
-            return scheduler
-        case _:
-            lr_lambda = lr_lambda_constant()
+            case LearningRateScheduler.CUSTOM:
+                # Special case. Unlike the others, we return from here.
+                if not config.custom_learning_rate_scheduler:
+                    raise AssertionError("Must specify a class when using a custom LR scheduler.")
+                if "." not in config.custom_learning_rate_scheduler:
+                    raise AssertionError("Custom class name must be in the format <module>.<class>")
+                klass = config.custom_learning_rate_scheduler.split(".")[-1]
+                module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
+                module = importlib.import_module(module)
+                klass = getattr(module, klass)
+                # Compile arguments into single dict.
+                args = {}
+                for pd in config.scheduler_params:
+                    key = pd["key"]
+                    value = pd["value"]
+                    # Special values
+                    match value:
+                        case "%LR%":
+                            value = config.learning_rate
+                        case "%EPOCHS%":
+                            value = num_epochs
+                        case "%STEPS_PER_EPOCH%":
+                            value = steps_per_epoch
+                        case "%TOTAL_STEPS%":
+                            value = total_steps
+                        case "%SCHEDULER_STEPS%":
+                            value = scheduler_steps
+                        case _:
+                            value = ast.literal_eval(value)
+                    args[key] = value
+                scheduler = klass(optimizer=optimizer,
+                                last_epoch=int(global_step / gradient_accumulation_steps) - 1,
+                                **args)
+                if warmup_steps > 0:
+                    warmup_scheduler = LambdaLR(
+                        optimizer=optimizer,
+                        lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
+                        last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                    scheduler = SequentialLR(
+                        optimizer,
+                        initial_lr=optimizer.state_dict()['param_groups'][0]['initial_lr'],
+                    )
+            case LearningRateScheduler.CUSTOM:
+                # Special case. Unlike the others, we return from here.
+                if not config.custom_learning_rate_scheduler:
+                    raise AssertionError("Must specify a class when using a custom LR scheduler.")
+                if "." not in config.custom_learning_rate_scheduler:
+                    raise AssertionError("Custom class name must be in the format <module>.<class>")
+                klass = config.custom_learning_rate_scheduler.split(".")[-1]
+                module = config.custom_learning_rate_scheduler.removesuffix("." + klass)
+                module = importlib.import_module(module)
+                klass = getattr(module, klass)
+                # Compile arguments into single dict.
+                args = {}
+                for pd in config.scheduler_params:
+                    key = pd["key"]
+                    value = pd["value"]
+                    # Special values
+                    match value:
+                        case "%LR%":
+                            value = config.learning_rate
+                        case "%EPOCHS%":
+                            value = num_epochs
+                        case "%STEPS_PER_EPOCH%":
+                            value = steps_per_epoch
+                        case "%TOTAL_STEPS%":
+                            value = total_steps
+                        case "%SCHEDULER_STEPS%":
+                            value = scheduler_steps
+                        case _:
+                            value = ast.literal_eval(value)
+                    args[key] = value
+                scheduler = klass(optimizer=optimizer,
+                                last_epoch=int(global_step / gradient_accumulation_steps) - 1,
+                                **args)
+                if warmup_steps > 0:
+                    warmup_scheduler = LambdaLR(
+                        optimizer=optimizer,
+                        lr_lambda=lr_lambda_warmup(warmup_steps, lr_lambda_constant()),
+                        last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                    scheduler = SequentialLR(
+                        optimizer,
+                        schedulers=[warmup_scheduler, scheduler],
+                        milestones=[warmup_steps],
+                        last_epoch=int(global_step / gradient_accumulation_steps) - 1)
+                return scheduler
+            case _:
+                lr_lambda = lr_lambda_constant()
 
-    if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
-        lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
+        if warmup_steps > 0 and not (config.optimizer.optimizer.is_schedule_free or config.use_schedulefree_wrapper):
+            lr_lambda = lr_lambda_warmup(warmup_steps, lr_lambda)
+
+        lr_lambdas.append(lr_lambda)
 
 
     return LambdaLR(
         optimizer=optimizer,
-        lr_lambda=lr_lambda,
+        lr_lambda=lr_lambdas,
         last_epoch=int(global_step / gradient_accumulation_steps) - 1,
     )
 
